@@ -1,0 +1,6 @@
+server.py
+requirements.txt
+START_*.bat
+run_server.sh
+__pycache__/
+*.pyc
