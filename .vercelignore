@@ -1,6 +1,21 @@
+# Anajak Python backend
 server.py
 requirements.txt
-START_*.bat
 run_server.sh
-__pycache__/
+START_*.bat
+
+# Python project detection files
+pyproject.toml
+.python-version
+Pipfile
+Pipfile.lock
+poetry.lock
+uv.lock
+runtime.txt
+
+# Python source/cache
+*.py
 *.pyc
+__pycache__/
+.venv/
+venv/
