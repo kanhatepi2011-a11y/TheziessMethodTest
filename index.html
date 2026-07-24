@@ -1,0 +1,2617 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HQ Video Compressor V15 — Fast Purple Edition</title>
+    <style>
+        :root {
+            --bg: #0b0d10;
+            --card: #14171c;
+            --card2: #1a1e24;
+            --border: #2a2f38;
+            --text: #e5e7eb;
+            --text2: #9ca3af;
+            --accent: #5eead4;
+            --accent2: #14b8a6;
+            --danger: #f87171;
+            --warning: #fbbf24;
+            --warning-bg: rgba(251,191,36,.09);
+            --warning-border: rgba(251,191,36,.28);
+            --success: #34d399;
+            --radius: 12px;
+            --transition: .2s ease;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+            background: var(--bg);
+            color: var(--text);
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Khmer", sans-serif;
+            line-height: 1.6;
+        }
+
+        .app {
+            width: 100%;
+            max-width: 680px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .header { text-align: center; padding: 10px 0 2px; }
+        .header h1 { color: var(--accent); font-size: 1.8rem; letter-spacing: -.4px; }
+        .header p { color: var(--text2); font-size: .9rem; margin-top: 4px; }
+
+        .notice {
+            display: none;
+            padding: 14px 16px;
+            border: 1px solid var(--warning-border);
+            border-radius: var(--radius);
+            background: var(--warning-bg);
+            color: var(--warning);
+            font-size: .86rem;
+        }
+        .notice.visible { display: block; }
+        .notice strong { display: block; margin-bottom: 3px; }
+        .notice code {
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(251,191,36,.12);
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+
+        .card {
+            padding: 22px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--card);
+        }
+
+        .drop-zone {
+            padding: 46px 22px;
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            text-align: center;
+            cursor: pointer;
+            transition: border-color var(--transition), background var(--transition);
+        }
+        .drop-zone:hover, .drop-zone.drag-over {
+            border-color: var(--accent);
+            background: rgba(94,234,212,.035);
+        }
+        .drop-zone .icon { display: block; margin-bottom: 12px; font-size: 3rem; }
+        .drop-zone .label { font-size: 1rem; font-weight: 650; }
+        .drop-zone .hint { margin-top: 6px; color: var(--text2); font-size: .8rem; }
+        .drop-zone input { display: none; }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 12px;
+            padding: 12px 15px;
+            border-radius: 8px;
+            background: var(--card2);
+            font-size: .88rem;
+        }
+        .fname { flex: 1; color: var(--accent); font-weight: 600; word-break: break-all; }
+        .fsize { color: var(--text2); white-space: nowrap; }
+        .remove {
+            border: 0;
+            background: transparent;
+            color: var(--danger);
+            cursor: pointer;
+            font-size: 1.15rem;
+        }
+
+        .metadata {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .meta-box {
+            padding: 9px;
+            border-radius: 8px;
+            background: rgba(255,255,255,.025);
+            text-align: center;
+        }
+        .meta-label { color: var(--text2); font-size: .68rem; text-transform: uppercase; }
+        .meta-value { margin-top: 2px; font-size: .82rem; font-weight: 650; }
+
+        .slider-group { display: flex; flex-direction: column; gap: 7px; margin-bottom: 17px; }
+        .slider-group:last-child { margin-bottom: 0; }
+        .slider-group label { display: flex; justify-content: space-between; gap: 12px; color: var(--text2); font-size: .85rem; }
+        .slider-group .val { color: var(--accent); font-weight: 700; text-align: right; }
+        .slider-hint { color: #7f8794; font-size: .73rem; }
+
+        .mode-banner {
+            margin-top: 18px;
+            padding: 14px 15px;
+            border: 1px solid rgba(94,234,212,.24);
+            border-radius: 10px;
+            background: rgba(94,234,212,.045);
+        }
+        .mode-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            color: var(--accent);
+            font-size: .86rem;
+            font-weight: 750;
+        }
+        .mode-pill {
+            padding: 2px 8px;
+            border: 1px solid rgba(94,234,212,.25);
+            border-radius: 999px;
+            background: rgba(94,234,212,.08);
+            font-size: .7rem;
+            white-space: nowrap;
+        }
+        .mode-note { margin-top: 6px; color: var(--text2); font-size: .73rem; }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 999px;
+            background: var(--border);
+            outline: none;
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--bg);
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border: 2px solid var(--bg);
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+        }
+
+        .btn {
+            width: 100%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 13px 24px;
+            border: 0;
+            border-radius: 8px;
+            font-size: .95rem;
+            font-weight: 750;
+            cursor: pointer;
+            transition: opacity var(--transition), transform var(--transition);
+        }
+        .btn:active { transform: scale(.985); }
+        .btn-primary { background: var(--accent); color: #07100f; }
+        .btn-primary:hover:not(:disabled) { opacity: .9; }
+        .btn-primary:disabled { opacity: .43; cursor: not-allowed; }
+        .btn-outline { border: 1px solid var(--accent); background: transparent; color: var(--accent); text-decoration: none; }
+        .btn-outline:hover { background: rgba(94,234,212,.06); }
+
+        .progress-wrap { display: flex; flex-direction: column; gap: 8px; }
+        .progress-top { display: flex; justify-content: space-between; gap: 12px; }
+        .progress-stage { color: var(--accent); font-size: .85rem; font-weight: 650; }
+        .progress-percent { color: var(--text2); font-size: .82rem; }
+        .progress-bar-outer { height: 8px; overflow: hidden; border-radius: 999px; background: var(--border); }
+        .progress-bar-inner { width: 0; height: 100%; border-radius: inherit; background: var(--accent); transition: width .25s ease; }
+
+        .log-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            border: 0;
+            background: none;
+            color: var(--text2);
+            cursor: pointer;
+            font-size: .85rem;
+        }
+        .log-panel {
+            display: none;
+            max-height: 220px;
+            overflow: auto;
+            margin-top: 9px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #090b0e;
+            color: #aeb6c2;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: .73rem;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .log-panel.visible { display: block; }
+
+        .result { display: flex; flex-direction: column; gap: 12px; }
+        .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .size-box { padding: 13px; border-radius: 8px; background: var(--card2); text-align: center; }
+        .size-label { color: var(--text2); font-size: .72rem; text-transform: uppercase; }
+        .size-value { margin-top: 2px; font-size: 1.1rem; font-weight: 750; }
+        .after .size-value { color: var(--accent); }
+        .saving { color: var(--success); text-align: center; font-size: .85rem; }
+        .saving.warning { color: var(--warning); }
+
+        .tool-nav {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            padding: 6px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--card);
+            position: sticky;
+            top: 10px;
+            z-index: 20;
+            box-shadow: 0 10px 30px rgba(0,0,0,.18);
+        }
+        .tool-nav-btn {
+            min-height: 44px;
+            border: 0;
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text2);
+            font: inherit;
+            font-size: .9rem;
+            font-weight: 750;
+            cursor: pointer;
+            transition: background var(--transition), color var(--transition), transform var(--transition);
+        }
+        .tool-nav-btn:hover { color: var(--text); background: rgba(255,255,255,.035); }
+        .tool-nav-btn:active { transform: scale(.985); }
+        .tool-nav-btn.active {
+            color: #07100f;
+            background: var(--accent);
+            box-shadow: 0 6px 16px rgba(94,234,212,.14);
+        }
+
+        .tool-view {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+        .tool-view.hidden-view { display: none; }
+
+        .stats-shell {
+            padding: 16px;
+            border-radius: 28px;
+            background: #e9efeb;
+            color: #102219;
+            box-shadow: 0 18px 45px rgba(0,0,0,.22);
+        }
+        .stats-inner {
+            padding: 14px 10px 2px;
+        }
+        .stats-heading {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .stats-logo {
+            width: 38px;
+            height: 38px;
+            display: grid;
+            place-items: center;
+            border-radius: 12px;
+            background: rgba(47,125,86,.12);
+            color: #2f7d56;
+            font-size: 1.35rem;
+        }
+        .stats-heading h2 {
+            font-size: 1.22rem;
+            line-height: 1.25;
+        }
+        .stats-heading p {
+            margin-top: 2px;
+            color: #2f7d56;
+            font-size: .76rem;
+            font-weight: 700;
+        }
+        .stats-label {
+            display: block;
+            margin-bottom: 7px;
+            color: #2f7d56;
+            font-size: .8rem;
+            font-weight: 700;
+        }
+        .stats-url-row {
+            display: flex;
+            gap: 8px;
+        }
+        .stats-input {
+            width: 100%;
+            min-height: 54px;
+            padding: 0 16px;
+            border: 1px solid #b9d2c5;
+            border-radius: 999px;
+            outline: none;
+            background: rgba(255,255,255,.78);
+            color: #14251c;
+            font: inherit;
+            font-size: .9rem;
+            transition: border-color var(--transition), box-shadow var(--transition);
+        }
+        .stats-input:focus {
+            border-color: #3a8b63;
+            box-shadow: 0 0 0 4px rgba(58,139,99,.1);
+        }
+        .stats-server-state {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            margin: 9px 4px 0;
+            color: #567264;
+            font-size: .72rem;
+            font-weight: 700;
+        }
+        .stats-server-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #d59b36;
+            box-shadow: 0 0 0 3px rgba(213,155,54,.12);
+        }
+        .stats-server-state.ready { color: #2f7d56; }
+        .stats-server-state.ready .stats-server-dot {
+            background: #36a36c;
+            box-shadow: 0 0 0 3px rgba(54,163,108,.12);
+        }
+        .stats-server-state.error { color: #a54b4b; }
+        .stats-server-state.error .stats-server-dot {
+            background: #d45a5a;
+            box-shadow: 0 0 0 3px rgba(212,90,90,.12);
+        }
+
+        .stats-file-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 12px;
+        }
+        .stats-file-btn {
+            flex: 0 0 auto;
+            padding: 10px 14px;
+            border: 1px solid #b9d2c5;
+            border-radius: 12px;
+            background: rgba(255,255,255,.72);
+            color: #235f42;
+            font: inherit;
+            font-size: .78rem;
+            font-weight: 750;
+            cursor: pointer;
+        }
+        .stats-file-name {
+            min-width: 0;
+            overflow: hidden;
+            color: #49675a;
+            font-size: .75rem;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .stats-divider {
+            height: 1px;
+            margin: 20px 0 16px;
+            border-top: 1px dashed #bdd0c5;
+        }
+        .stats-profile {
+            display: grid;
+            grid-template-columns: 90px minmax(0, 1fr);
+            gap: 16px;
+            align-items: center;
+        }
+        .stats-thumb {
+            width: 90px;
+            height: 120px;
+            overflow: hidden;
+            border: 1px solid #b9d2c5;
+            border-radius: 12px;
+            background:
+                radial-gradient(circle at 30% 25%, rgba(60,150,104,.24), transparent 38%),
+                linear-gradient(145deg, #f7faf8, #dbe7e0);
+            display: grid;
+            place-items: center;
+            color: #4f7562;
+            font-size: 1.7rem;
+        }
+        .stats-thumb img {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: cover;
+        }
+        .stats-author {
+            font-size: .96rem;
+            font-weight: 850;
+            word-break: break-word;
+        }
+        .stats-handle {
+            margin-top: 3px;
+            color: #2f7d56;
+            font-size: .77rem;
+            font-weight: 700;
+        }
+        .stats-caption {
+            margin-top: 10px;
+            color: #2e473a;
+            font-size: .78rem;
+            line-height: 1.55;
+            word-break: break-word;
+        }
+        .stats-grid {
+            display: grid;
+            gap: 2px;
+            margin-top: 16px;
+            padding: 14px 14px;
+            border: 1px solid #b9d2c5;
+            border-radius: 16px;
+            background: rgba(255,255,255,.34);
+        }
+        .stats-item {
+            display: grid;
+            grid-template-columns: 24px 1fr auto;
+            gap: 8px;
+            align-items: center;
+            min-height: 34px;
+            font-size: .82rem;
+        }
+        .stats-item-icon {
+            color: #2f7d56;
+            text-align: center;
+        }
+        .stats-item-value {
+            font-weight: 850;
+            text-align: right;
+            white-space: nowrap;
+        }
+        .stats-quality {
+            margin-top: 12px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: rgba(47,125,86,.1);
+            color: #22583e;
+            font-size: .77rem;
+            font-weight: 700;
+            text-align: center;
+        }
+        .stats-status {
+            min-height: 22px;
+            margin: 12px 4px 0;
+            color: #516f60;
+            font-size: .73rem;
+            line-height: 1.5;
+            text-align: center;
+        }
+        .stats-action {
+            width: 100%;
+            min-height: 52px;
+            margin-top: 14px;
+            border: 0;
+            border-radius: 999px;
+            background: #377f59;
+            color: white;
+            font: inherit;
+            font-size: .9rem;
+            font-weight: 850;
+            cursor: pointer;
+            transition: opacity var(--transition), transform var(--transition);
+        }
+        .stats-action:hover:not(:disabled) { opacity: .92; }
+        .stats-action:active { transform: scale(.99); }
+        .stats-action:disabled { opacity: .55; cursor: wait; }
+
+        .hidden { display: none !important; }
+
+        @media (max-width: 480px) {
+            body { padding: 12px; }
+            .app { gap: 14px; }
+            .card { padding: 16px; }
+            .drop-zone { padding: 32px 16px; }
+            .header h1 { font-size: 1.42rem; }
+            .metadata { grid-template-columns: 1fr; }
+            .tool-nav { top: 6px; }
+            .stats-shell { padding: 10px; border-radius: 22px; }
+            .stats-inner { padding: 12px 6px 2px; }
+            .stats-profile { grid-template-columns: 76px minmax(0, 1fr); gap: 12px; }
+            .stats-thumb { width: 76px; height: 102px; }
+            .stats-file-row { align-items: flex-start; flex-direction: column; }
+        }
+
+        /* ── V11 clean Statistics layout ── */
+        #statisticsView {
+            align-items: center;
+        }
+
+        #statisticsView .stats-shell {
+            width: 100%;
+            max-width: 520px;
+            margin: 0 auto;
+            padding: 14px 16px 16px;
+            border-radius: 28px;
+            transition: max-width .28s ease, box-shadow .28s ease;
+        }
+
+        #statisticsView .stats-shell.has-results {
+            max-width: 620px;
+        }
+
+        #statisticsView .stats-inner {
+            padding: 10px 8px 2px;
+        }
+
+        #statisticsView .stats-heading {
+            margin-bottom: 20px;
+        }
+
+        #statisticsView .stats-heading h2 {
+            font-size: 1.18rem;
+        }
+
+        #statisticsView .stats-input {
+            min-height: 56px;
+            font-size: .92rem;
+        }
+
+        #statisticsView .stats-action {
+            min-height: 52px;
+            margin-top: 16px;
+            font-size: .9rem;
+        }
+
+        .stats-results {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            margin-top: 18px;
+            animation: statsReveal .28s ease;
+        }
+
+        .stats-result-content {
+            animation: statsReveal .28s ease;
+        }
+
+        .stats-results .stats-server-state {
+            margin: 0 4px 2px;
+            padding: 9px 12px;
+            border-radius: 12px;
+            background: rgba(47,125,86,.08);
+        }
+
+        .stats-results .stats-server-state.error {
+            background: rgba(165,75,75,.08);
+        }
+
+        .stats-results .stats-divider {
+            margin: 14px 0 16px;
+        }
+
+        @keyframes statsReveal {
+            from { opacity: 0; transform: translateY(-6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 480px) {
+            #statisticsView .stats-shell,
+            #statisticsView .stats-shell.has-results {
+                max-width: 100%;
+            }
+        }
+
+
+        /* ─────────────────────────────────────────────────────
+           V15 Purple Glass Redesign
+        ───────────────────────────────────────────────────── */
+        :root {
+            --bg: #090611;
+            --card: rgba(24, 16, 43, .88);
+            --card2: rgba(42, 27, 70, .82);
+            --border: rgba(167, 139, 250, .24);
+            --text: #f7f2ff;
+            --text2: #b9add0;
+            --accent: #a78bfa;
+            --accent2: #7c3aed;
+            --danger: #fb7185;
+            --warning: #f5d0fe;
+            --warning-bg: rgba(168, 85, 247, .10);
+            --warning-border: rgba(192, 132, 252, .30);
+            --success: #c084fc;
+            --radius: 16px;
+        }
+
+        body {
+            background:
+                radial-gradient(circle at 15% 8%, rgba(124, 58, 237, .28), transparent 32%),
+                radial-gradient(circle at 88% 16%, rgba(168, 85, 247, .18), transparent 30%),
+                radial-gradient(circle at 48% 100%, rgba(76, 29, 149, .22), transparent 42%),
+                linear-gradient(160deg, #07040e 0%, #0d0718 52%, #120823 100%);
+            background-attachment: fixed;
+        }
+
+        .app { max-width: 720px; }
+        .header { padding-top: 14px; }
+
+        .header h1 {
+            color: transparent;
+            background: linear-gradient(90deg, #ddd6fe 0%, #a78bfa 42%, #e879f9 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            text-shadow: 0 0 30px rgba(168, 85, 247, .20);
+        }
+
+        .header p { color: #b9add0; }
+
+        .card,
+        .tool-nav {
+            border-color: rgba(167, 139, 250, .22);
+            background:
+                linear-gradient(145deg, rgba(33, 21, 57, .94), rgba(18, 12, 34, .94));
+            box-shadow:
+                0 18px 48px rgba(4, 2, 12, .34),
+                inset 0 1px 0 rgba(255, 255, 255, .035);
+            backdrop-filter: blur(16px);
+        }
+
+        .tool-nav {
+            border-radius: 16px;
+            padding: 7px;
+        }
+
+        .tool-nav-btn {
+            border-radius: 11px;
+            color: #c9bddc;
+        }
+
+        .tool-nav-btn:hover {
+            color: #fff;
+            background: rgba(167, 139, 250, .09);
+        }
+
+        .tool-nav-btn.active,
+        .btn-primary {
+            color: #fff;
+            background: linear-gradient(135deg, #7c3aed 0%, #a855f7 55%, #c026d3 100%);
+            box-shadow:
+                0 10px 26px rgba(124, 58, 237, .30),
+                inset 0 1px 0 rgba(255, 255, 255, .22);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            opacity: 1;
+            filter: brightness(1.08);
+        }
+
+        .btn-outline {
+            border-color: #a78bfa;
+            color: #ddd6fe;
+            background: rgba(124, 58, 237, .08);
+        }
+
+        .btn-outline:hover {
+            background: rgba(124, 58, 237, .18);
+        }
+
+        .drop-zone {
+            border-color: rgba(167, 139, 250, .28);
+            background:
+                radial-gradient(circle at 50% 38%, rgba(124, 58, 237, .11), transparent 45%),
+                rgba(8, 5, 18, .18);
+        }
+
+        .drop-zone:hover,
+        .drop-zone.drag-over {
+            border-color: #a78bfa;
+            background: rgba(124, 58, 237, .10);
+            box-shadow: inset 0 0 34px rgba(124, 58, 237, .08);
+        }
+
+        .fname,
+        .slider-group .val,
+        .progress-stage,
+        .after .size-value {
+            color: #c4b5fd;
+        }
+
+        input[type="range"] {
+            background: rgba(167, 139, 250, .20);
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            background: linear-gradient(135deg, #c4b5fd, #8b5cf6);
+            box-shadow: 0 0 0 4px rgba(139, 92, 246, .16);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            background: linear-gradient(135deg, #c4b5fd, #8b5cf6);
+        }
+
+        .progress-bar-inner {
+            background: linear-gradient(90deg, #7c3aed, #a855f7, #e879f9);
+            box-shadow: 0 0 18px rgba(168, 85, 247, .36);
+        }
+
+        #statisticsView .stats-shell {
+            border: 1px solid rgba(196, 181, 253, .78);
+            color: #28133f;
+            background:
+                radial-gradient(circle at 95% 2%, rgba(196, 181, 253, .58), transparent 30%),
+                linear-gradient(145deg, #fbf9ff 0%, #f2ecff 55%, #e9ddff 100%);
+            box-shadow:
+                0 24px 64px rgba(76, 29, 149, .34),
+                inset 0 1px 0 rgba(255, 255, 255, .95);
+        }
+
+        .stats-logo {
+            color: #6d28d9;
+            background: linear-gradient(145deg, #ede9fe, #ddd6fe);
+            box-shadow: 0 8px 20px rgba(109, 40, 217, .14);
+        }
+
+        .stats-heading h2 { color: #24103b; }
+        .stats-heading p,
+        .stats-label { color: #6d28d9; }
+
+        .stats-input {
+            border-color: #c4b5fd;
+            color: #24103b;
+            background: rgba(255, 255, 255, .82);
+            box-shadow: inset 0 1px 2px rgba(76, 29, 149, .05);
+        }
+
+        .stats-input::placeholder { color: #9887ae; }
+
+        .stats-input:focus {
+            border-color: #8b5cf6;
+            box-shadow:
+                0 0 0 4px rgba(139, 92, 246, .13),
+                0 10px 24px rgba(109, 40, 217, .08);
+        }
+
+        .stats-action {
+            color: #fff;
+            background: linear-gradient(135deg, #6d28d9 0%, #9333ea 52%, #c026d3 100%);
+            box-shadow: 0 13px 30px rgba(109, 40, 217, .26);
+        }
+
+        .stats-action:hover:not(:disabled) {
+            opacity: 1;
+            filter: brightness(1.08);
+            transform: translateY(-1px);
+        }
+
+        .stats-server-state { color: #6b5a83; }
+
+        .stats-results .stats-server-state {
+            border: 1px solid rgba(139, 92, 246, .12);
+            background: rgba(139, 92, 246, .08);
+        }
+
+        .stats-server-state.ready { color: #6d28d9; }
+
+        .stats-server-state.ready .stats-server-dot {
+            background: #8b5cf6;
+            box-shadow: 0 0 0 4px rgba(139, 92, 246, .14);
+        }
+
+        .stats-server-state:not(.ready):not(.error) .stats-server-dot {
+            background: #a855f7;
+            box-shadow: 0 0 0 4px rgba(168, 85, 247, .13);
+            animation: v15Pulse 1.05s ease-in-out infinite;
+        }
+
+        .stats-divider { border-color: rgba(124, 58, 237, .20); }
+
+        .stats-thumb {
+            border-color: #c4b5fd;
+            color: #7c3aed;
+            background:
+                radial-gradient(circle at 30% 25%, rgba(168, 85, 247, .27), transparent 40%),
+                linear-gradient(145deg, #faf7ff, #e9ddff);
+            box-shadow: 0 12px 28px rgba(109, 40, 217, .13);
+        }
+
+        .stats-author { color: #24103b; }
+        .stats-handle { color: #7c3aed; }
+        .stats-caption { color: #554268; }
+
+        .stats-grid {
+            border-color: rgba(139, 92, 246, .30);
+            background: rgba(255, 255, 255, .44);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, .75);
+        }
+
+        .stats-item-icon { color: #7c3aed; }
+        .stats-item-value { color: #26123d; }
+
+        .stats-quality {
+            color: #5b21b6;
+            background: linear-gradient(135deg, rgba(196, 181, 253, .42), rgba(216, 180, 254, .30));
+        }
+
+        .stats-status { color: #6b5a83; }
+
+        @keyframes v15Pulse {
+            0%, 100% { transform: scale(.86); opacity: .64; }
+            50% { transform: scale(1.18); opacity: 1; }
+        }
+
+        @media (max-width: 480px) {
+            body { padding: 10px; }
+            .header h1 { font-size: 1.5rem; }
+            #statisticsView .stats-shell { border-radius: 24px; }
+        }
+
+    </style>
+</head>
+<body>
+<div class="app">
+    <div class="notice" id="protocolNotice">
+        <strong>⚠️ សូមបើកតាម HTTP/HTTPS server</strong>
+        កុំបើកឯកសារនេះដោយផ្ទាល់ជា <code>file://</code>។ ប្រើ VS Code Live Server ឬ
+        <code>python -m http.server 8000</code> រួចបើក <code>http://localhost:8000</code>។
+    </div>
+
+    <header class="header">
+        <h1>🎬 HQ Video Compressor</h1>
+        <p>រក្សាគុណភាពខ្ពស់ • 4K បម្លែងទៅ 1080P • 25–40 Mbps • MP4 metadata 600 FPS • មិន Upload ទៅ Server</p>
+    </header>
+
+    <nav class="tool-nav" aria-label="Tools">
+        <button class="tool-nav-btn active" id="compressTabBtn" type="button">🎬 Compress</button>
+        <button class="tool-nav-btn" id="statisticsTabBtn" type="button">📊 Statistics</button>
+    </nav>
+
+    <main class="tool-view" id="compressView">
+    <section class="card">
+        <div class="drop-zone" id="dropZone">
+            <span class="icon">📁</span>
+            <div class="label">អូស និងទម្លាក់ឯកសារវីដេអូនៅទីនេះ</div>
+            <div class="hint">ឬចុចដើម្បីជ្រើសរើស • MP4, MOV, MKV, WebM និងទម្រង់ផ្សេងៗ</div>
+            <input type="file" id="fileInput" accept="video/*,.mkv,.avi,.mov,.m4v,.webm,.ts,.mts,.m2ts">
+        </div>
+
+        <div class="file-info hidden" id="fileInfo">
+            <span class="fname" id="fileName">—</span>
+            <span class="fsize" id="fileSize">—</span>
+            <button class="remove" id="removeFile" type="button" title="ដកឯកសារ">✕</button>
+        </div>
+
+        <div class="metadata hidden" id="metadataRow">
+            <div class="meta-box"><div class="meta-label">Duration</div><div class="meta-value" id="durationValue">—</div></div>
+            <div class="meta-box"><div class="meta-label">Resolution</div><div class="meta-value" id="resolutionValue">—</div></div>
+            <div class="meta-box"><div class="meta-label">Average bitrate</div><div class="meta-value" id="sourceBitrateValue">—</div></div>
+        </div>
+    </section>
+
+    <section class="card hidden" id="settingsCard">
+        <div class="mode-banner">
+            <div class="mode-title">
+                <span>💎 HQ Target-Bitrate Mode</span>
+                <span class="mode-pill">25–40 Mbps + Lanczos</span>
+            </div>
+            <div class="mode-note" id="outputRuleText">វីដេអូដែលលើស 1080P នឹងត្រូវបន្ថយទៅ 1920×1080 ឬ 1080×1920។ ជ្រើស Target bitrate ចន្លោះ 25–40 Mbps។</div>
+        </div>
+
+        <div class="slider-group" style="margin-top:17px">
+            <label>
+                <span>Target Video Bitrate</span>
+                <span class="val" id="bitrateValue">30 Mbps</span>
+            </label>
+            <input type="range" id="bitrateSlider" min="25" max="40" value="30" step="1">
+            <div class="slider-hint">កំណត់ Average bitrate គោលដៅពី 25 ដល់ 40 Mbps។ Default = 30 Mbps។ វីដេអូសាមញ្ញអាចចេញទាបជាងគោលដៅបន្តិច។</div>
+        </div>
+
+        <div class="slider-group">
+            <label>
+                <span>ល្បឿន Encode</span>
+                <span class="val" id="speedValue">Balanced</span>
+            </label>
+            <input type="range" id="speedSlider" min="1" max="5" value="3" step="1">
+            <div class="slider-hint">Preset យឺតជាងអាចរក្សាគុណភាពបានល្អជាងនៅ Bitrate ដូចគ្នា ប៉ុន្តែចំណាយពេលយូរ។</div>
+        </div>
+
+        <div class="mode-banner">
+            <div class="mode-title">
+                <span>⚡ 600 FPS Metadata Mode</span>
+                <span class="mode-pill">10× fake samples</span>
+            </div>
+            <div class="mode-note">Frame ពិតត្រូវបាន Encode នៅ 60 FPS។ ប្រព័ន្ធបំបែក sample timing ជា 10 ដង ដើម្បីឱ្យ MP4 រាយការណ៍ប្រហែល 600 FPS។ នេះជា metadata/fake-samples មិនមែន 600 frame ពិតទេ។ ការបន្ថយ 4K ទៅ 1080P ប្រើ Lanczos និង Target bitrate 25–40 Mbps សម្រាប់គុណភាពខ្ពស់។</div>
+        </div>
+    </section>
+
+    <button class="btn btn-primary hidden" id="compressBtn" type="button" disabled>បម្លែង HQ 1080P + 25–40 Mbps + 600 FPS</button>
+
+    <section class="card hidden" id="progressCard">
+        <div class="progress-wrap">
+            <div class="progress-top">
+                <div class="progress-stage" id="progressStage">កំពុងរៀបចំ...</div>
+                <div class="progress-percent" id="progressPercent">0%</div>
+            </div>
+            <div class="progress-bar-outer"><div class="progress-bar-inner" id="progressBar"></div></div>
+        </div>
+    </section>
+
+    <section class="card" id="logCard">
+        <button class="log-toggle" id="logToggle" type="button">📋 កំណត់ហេតុ ▸</button>
+        <div class="log-panel" id="logPanel"></div>
+    </section>
+
+    <section class="card hidden" id="resultCard">
+        <div class="result">
+            <div class="comparison">
+                <div class="size-box before"><div class="size-label">មុន</div><div class="size-value" id="beforeSize">—</div></div>
+                <div class="size-box after"><div class="size-label">ក្រោយ</div><div class="size-value" id="afterSize">—</div></div>
+            </div>
+            <div class="saving" id="savingText">—</div>
+            <a class="btn btn-outline hidden" id="downloadLink" download="Thziess_0000000000.mp4">⬇ ទាញយកវីដេអូ HQ 1080P + 600 FPS</a>
+        </div>
+    </section>
+    </main>
+
+    <main class="tool-view hidden-view" id="statisticsView">
+        <section class="stats-shell" id="statsShell">
+            <div class="stats-inner">
+                <div class="stats-heading">
+                    <div class="stats-logo">📈</div>
+                    <div>
+                        <h2>TikTok Statistics <span style="font-size:.62rem;color:#2f7d56;vertical-align:middle">V15</span></h2>
+                        <p>Metadata &amp; Stream Analyser</p>
+                    </div>
+                </div>
+
+                <label class="stats-label" for="tiktokUrlInput">TikTok Video URL</label>
+                <div class="stats-url-row">
+                    <input class="stats-input" id="tiktokUrlInput" type="url"
+                        placeholder="https://www.tiktok.com/@username/video/..."
+                        autocomplete="off" spellcheck="false">
+                </div>
+
+                <button class="stats-action" id="getStatisticsBtn" type="button">
+                    ⚡ Get Statistics
+                </button>
+
+                <div class="stats-results hidden" id="statsResults">
+                    <div class="stats-server-state" id="statsServerState">
+                        <span class="stats-server-dot"></span>
+                        <span>Checking TikTok stream…</span>
+                    </div>
+
+                    <div class="stats-result-content hidden" id="statsResultContent">
+                        <div class="stats-divider"></div>
+
+                        <div class="stats-profile">
+                            <div class="stats-thumb" id="statsThumb">
+                                <span id="statsThumbPlaceholder">🎵</span>
+                                <img class="hidden" id="statsThumbImage"
+                                    alt="TikTok thumbnail" referrerpolicy="no-referrer">
+                            </div>
+                            <div>
+                                <div class="stats-author" id="statsAuthor">TikTok creator</div>
+                                <div class="stats-handle" id="statsHandle">@username</div>
+                                <div class="stats-caption" id="statsCaption">TikTok video information</div>
+                            </div>
+                        </div>
+
+                        <div class="stats-grid">
+                            <div class="stats-item">
+                                <span class="stats-item-icon">▣</span>
+                                <span>Resolution</span>
+                                <span class="stats-item-value" id="statsResolution">—</span>
+                            </div>
+                            <div class="stats-item">
+                                <span class="stats-item-icon">◴</span>
+                                <span>Frame Rate (FPS)</span>
+                                <span class="stats-item-value" id="statsFps">—</span>
+                            </div>
+                            <div class="stats-item">
+                                <span class="stats-item-icon">▥</span>
+                                <span>Average Bitrate</span>
+                                <span class="stats-item-value" id="statsBitrate">—</span>
+                            </div>
+                            <div class="stats-item">
+                                <span class="stats-item-icon">◷</span>
+                                <span>Duration</span>
+                                <span class="stats-item-value" id="statsDuration">—</span>
+                            </div>
+                            <div class="stats-item">
+                                <span class="stats-item-icon">▣</span>
+                                <span>File Size</span>
+                                <span class="stats-item-value" id="statsSize">—</span>
+                            </div>
+                        </div>
+
+                        <div class="stats-quality" id="statsQuality">Quality result</div>
+                        <div class="stats-status" id="statsStatus"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+</div>
+
+<script>
+(function () {
+    "use strict";
+
+    // Pinned single-thread core. The page uses its own classic Worker wrapper
+    // instead of @ffmpeg/ffmpeg's UMD classWorkerURL path, which breaks when
+    // a blob URL is passed and produces “Cannot find module blob:...”.
+    var FFMPEG_CORE_VERSION = "0.12.10";
+    var OUTPUT_REAL_FPS = 60;
+    var FAKE_SAMPLE_MULTIPLIER = 10;
+    var TARGET_DECLARED_FPS = 600;
+    var MAX_OUTPUT_LONG_EDGE = 1920;
+    var MIN_VIDEO_BITRATE_MBPS = 25;
+    var MAX_VIDEO_BITRATE_MBPS = 40;
+    var DEFAULT_VIDEO_BITRATE_MBPS = 30;
+    var FALLBACK_AUDIO_KBPS = 320;
+
+    var CORE_BASES = [
+        "https://cdn.jsdelivr.net/npm/@ffmpeg/core@" + FFMPEG_CORE_VERSION + "/dist/umd",
+        "https://unpkg.com/@ffmpeg/core@" + FFMPEG_CORE_VERSION + "/dist/umd"
+    ];
+
+    var $ = function (id) { return document.getElementById(id); };
+    var protocolNotice = $("protocolNotice");
+    var dropZone = $("dropZone");
+    var fileInput = $("fileInput");
+    var fileInfo = $("fileInfo");
+    var fileName = $("fileName");
+    var fileSize = $("fileSize");
+    var removeFile = $("removeFile");
+    var metadataRow = $("metadataRow");
+    var durationValue = $("durationValue");
+    var resolutionValue = $("resolutionValue");
+    var sourceBitrateValue = $("sourceBitrateValue");
+    var settingsCard = $("settingsCard");
+    var outputRuleText = $("outputRuleText");
+    var bitrateSlider = $("bitrateSlider");
+    var bitrateValue = $("bitrateValue");
+    var speedSlider = $("speedSlider");
+    var speedValue = $("speedValue");
+    var compressBtn = $("compressBtn");
+    var progressCard = $("progressCard");
+    var progressStage = $("progressStage");
+    var progressPercent = $("progressPercent");
+    var progressBar = $("progressBar");
+    var logToggle = $("logToggle");
+    var logPanel = $("logPanel");
+    var resultCard = $("resultCard");
+    var beforeSize = $("beforeSize");
+    var afterSize = $("afterSize");
+    var savingText = $("savingText");
+    var downloadLink = $("downloadLink");
+
+    var compressTabBtn = $("compressTabBtn");
+    var statisticsTabBtn = $("statisticsTabBtn");
+    var compressView = $("compressView");
+    var statisticsView = $("statisticsView");
+    var statsShell = $("statsShell");
+    var statsResults = $("statsResults");
+    var statsResultContent = $("statsResultContent");
+    var tiktokUrlInput = $("tiktokUrlInput");
+    var statsServerState = $("statsServerState");
+    var statsThumbImage = $("statsThumbImage");
+    var statsThumbPlaceholder = $("statsThumbPlaceholder");
+    var statsAuthor = $("statsAuthor");
+    var statsHandle = $("statsHandle");
+    var statsCaption = $("statsCaption");
+    var statsResolution = $("statsResolution");
+    var statsFps = $("statsFps");
+    var statsBitrate = $("statsBitrate");
+    var statsDuration = $("statsDuration");
+    var statsSize = $("statsSize");
+    var statsQuality = $("statsQuality");
+    var statsStatus = $("statsStatus");
+    var getStatisticsBtn = $("getStatisticsBtn");
+
+    var selectedFile = null;
+    var selectedMetadata = null;
+    var statsAnalysisToken = 0;
+    var ffmpegInstance = null;
+    var ffmpegLoaded = false;
+    var ffmpegLoadPromise = null;
+    var logLines = [];
+    var generatedBlobURLs = [];
+    var downloadObjectURL = null;
+
+    if (window.location.protocol === "file:") {
+        protocolNotice.classList.add("visible");
+    }
+
+    function formatBytes(bytes) {
+        if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+        var units = ["B", "KB", "MB", "GB"];
+        var index = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+        return (bytes / Math.pow(1024, index)).toFixed(index === 0 ? 0 : 2) + " " + units[index];
+    }
+
+    function formatDuration(seconds) {
+        if (!Number.isFinite(seconds) || seconds <= 0) return "—";
+        var total = Math.round(seconds);
+        var hours = Math.floor(total / 3600);
+        var minutes = Math.floor((total % 3600) / 60);
+        var secs = total % 60;
+        return (hours ? String(hours).padStart(2, "0") + ":" : "") +
+            String(minutes).padStart(2, "0") + ":" + String(secs).padStart(2, "0");
+    }
+
+    function clamp(value, min, max) {
+        return Math.min(max, Math.max(min, value));
+    }
+
+    function createRandomOutputFilename() {
+        // Exact format: Thziess_(10 random digits).mp4
+        var digits = "";
+        if (window.crypto && window.crypto.getRandomValues) {
+            var values = new Uint32Array(10);
+            window.crypto.getRandomValues(values);
+            for (var i = 0; i < values.length; i++) {
+                digits += String(values[i] % 10);
+            }
+        } else {
+            for (var j = 0; j < 10; j++) {
+                digits += String(Math.floor(Math.random() * 10));
+            }
+        }
+        return "Thziess_" + digits + ".mp4";
+    }
+
+    function appendLog(text) {
+        logLines.push(text);
+        if (logLines.length > 500) logLines.shift();
+        logPanel.textContent = logLines.join("\n");
+        logPanel.scrollTop = logPanel.scrollHeight;
+    }
+
+    function clearLog() {
+        logLines = [];
+        logPanel.textContent = "";
+    }
+
+    function setProgress(percent, text) {
+        var safePercent = clamp(Math.round(percent), 0, 100);
+        progressBar.style.width = safePercent + "%";
+        progressPercent.textContent = safePercent + "%";
+        progressStage.textContent = text;
+    }
+
+    function showError(error) {
+        var message = error && error.message ? error.message : String(error);
+        appendLog("[✗] " + message);
+        setProgress(0, "បរាជ័យ — សូមបើកកំណត់ហេតុ");
+        logPanel.classList.add("visible");
+        logToggle.textContent = "📋 កំណត់ហេតុ ▾";
+    }
+
+    async function fetchAsBlobURL(url, mimeType, timeoutMs) {
+        var controller = new AbortController();
+        var timer = setTimeout(function () { controller.abort(); }, timeoutMs || 120000);
+        try {
+            var response = await fetch(url, {
+                mode: "cors",
+                cache: "force-cache",
+                signal: controller.signal
+            });
+            if (!response.ok) {
+                throw new Error(response.status + " " + response.statusText + " — " + url);
+            }
+            var bytes = await response.arrayBuffer();
+            var blobURL = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+            generatedBlobURLs.push(blobURL);
+            return blobURL;
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    // A small classic-worker bridge for ffmpeg-core. This avoids the broken
+    // UMD classWorkerURL branch that creates a module Worker and then cannot
+    // import a blob URL. The bridge mirrors the public operations this page uses.
+    function createCoreWorkerURL() {
+        var workerSource = [
+            '"use strict";',
+            'var core = null;',
+            'function ensureLoaded(){ if(!core) throw new Error("FFmpeg core is not loaded"); }',
+            'self.onmessage = async function(event){',
+            '  var message = event.data || {};',
+            '  var id = message.id;',
+            '  var type = message.type;',
+            '  var data = message.data || {};',
+            '  var result = null;',
+            '  var transfer = [];',
+            '  try {',
+            '    switch(type){',
+            '      case "LOAD":',
+            '        if(!core){',
+            '          if(!data.coreURL || !data.wasmURL) throw new Error("Missing FFmpeg core URL");',
+            '          importScripts(data.coreURL);',
+            '          if(typeof self.createFFmpegCore !== "function") throw new Error("createFFmpegCore was not created");',
+            '          var metadata = btoa(JSON.stringify({ wasmURL: data.wasmURL, workerURL: data.workerURL || "" }));',
+            '          core = await self.createFFmpegCore({ mainScriptUrlOrBlob: data.coreURL + "#" + metadata });',
+            '          core.setLogger(function(entry){ self.postMessage({ type:"LOG", data:entry }); });',
+            '          core.setProgress(function(entry){ self.postMessage({ type:"PROGRESS", data:entry }); });',
+            '        }',
+            '        result = true;',
+            '        break;',
+            '      case "WRITE_FILE":',
+            '        ensureLoaded();',
+            '        core.FS.writeFile(data.path, data.bytes);',
+            '        result = true;',
+            '        break;',
+            '      case "READ_FILE":',
+            '        ensureLoaded();',
+            '        result = core.FS.readFile(data.path, { encoding: data.encoding || "binary" });',
+            '        if(result instanceof Uint8Array) transfer.push(result.buffer);',
+            '        break;',
+            '      case "DELETE_FILE":',
+            '        ensureLoaded();',
+            '        core.FS.unlink(data.path);',
+            '        result = true;',
+            '        break;',
+            '      case "EXEC":',
+            '        ensureLoaded();',
+            '        core.setTimeout(Number.isFinite(data.timeout) ? data.timeout : -1);',
+            '        core.exec.apply(core, data.args || []);',
+            '        result = core.ret;',
+            '        core.reset();',
+            '        break;',
+            '      default:',
+            '        throw new Error("Unknown worker command: " + type);',
+            '    }',
+            '    self.postMessage({ id:id, type:"RESULT", data:result }, transfer);',
+            '  } catch(error){',
+            '    var text = error && (error.stack || error.message) ? (error.stack || error.message) : String(error);',
+            '    self.postMessage({ id:id, type:"ERROR", data:text });',
+            '  }',
+            '};'
+        ].join("\n");
+
+        var url = URL.createObjectURL(new Blob([workerSource], { type: "text/javascript" }));
+        generatedBlobURLs.push(url);
+        return url;
+    }
+
+    function BrowserFFmpeg() {
+        this.worker = null;
+        this.nextId = 1;
+        this.pending = Object.create(null);
+        this.logHandlers = [];
+        this.progressHandlers = [];
+    }
+
+    BrowserFFmpeg.prototype.on = function (type, handler) {
+        if (type === "log") this.logHandlers.push(handler);
+        if (type === "progress") this.progressHandlers.push(handler);
+    };
+
+    BrowserFFmpeg.prototype._startWorker = function () {
+        var selfRef = this;
+        if (this.worker) return;
+
+        this.worker = new Worker(createCoreWorkerURL());
+        this.worker.onmessage = function (event) {
+            var message = event.data || {};
+
+            if (message.type === "LOG") {
+                selfRef.logHandlers.forEach(function (handler) { handler(message.data || {}); });
+                return;
+            }
+            if (message.type === "PROGRESS") {
+                selfRef.progressHandlers.forEach(function (handler) { handler(message.data || {}); });
+                return;
+            }
+
+            var pending = selfRef.pending[message.id];
+            if (!pending) return;
+            delete selfRef.pending[message.id];
+
+            if (message.type === "ERROR") pending.reject(new Error(message.data || "FFmpeg worker error"));
+            else pending.resolve(message.data);
+        };
+
+        this.worker.onerror = function (event) {
+            var error = new Error(event.message || "FFmpeg worker crashed");
+            Object.keys(selfRef.pending).forEach(function (id) {
+                selfRef.pending[id].reject(error);
+                delete selfRef.pending[id];
+            });
+        };
+    };
+
+    BrowserFFmpeg.prototype._call = function (type, data, transfer) {
+        this._startWorker();
+        var selfRef = this;
+        return new Promise(function (resolve, reject) {
+            var id = selfRef.nextId++;
+            selfRef.pending[id] = { resolve: resolve, reject: reject };
+            try {
+                selfRef.worker.postMessage({ id: id, type: type, data: data || {} }, transfer || []);
+            } catch (error) {
+                delete selfRef.pending[id];
+                reject(error);
+            }
+        });
+    };
+
+    BrowserFFmpeg.prototype.load = function (config) {
+        return this._call("LOAD", config || {});
+    };
+
+    BrowserFFmpeg.prototype.writeFile = function (path, bytes) {
+        var payload = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+        return this._call("WRITE_FILE", { path: path, bytes: payload }, [payload.buffer]);
+    };
+
+    BrowserFFmpeg.prototype.readFile = function (path, encoding) {
+        return this._call("READ_FILE", { path: path, encoding: encoding || "binary" });
+    };
+
+    BrowserFFmpeg.prototype.deleteFile = function (path) {
+        return this._call("DELETE_FILE", { path: path });
+    };
+
+    BrowserFFmpeg.prototype.exec = function (args, timeout) {
+        return this._call("EXEC", { args: args || [], timeout: Number.isFinite(timeout) ? timeout : -1 });
+    };
+
+    BrowserFFmpeg.prototype.terminate = function () {
+        if (this.worker) this.worker.terminate();
+        this.worker = null;
+        var error = new Error("FFmpeg worker terminated");
+        Object.keys(this.pending).forEach(function (id) {
+            this.pending[id].reject(error);
+            delete this.pending[id];
+        }, this);
+    };
+
+    async function loadFFmpegEngine() {
+        if (ffmpegLoaded && ffmpegInstance) return ffmpegInstance;
+        if (ffmpegLoadPromise) return ffmpegLoadPromise;
+
+        ffmpegLoadPromise = (async function () {
+            var lastError = null;
+
+            for (var i = 0; i < CORE_BASES.length; i++) {
+                var coreBase = CORE_BASES[i];
+                var instance = null;
+                try {
+                    appendLog("[i] Downloading FFmpeg core: " + coreBase);
+                    var coreURL = await fetchAsBlobURL(coreBase + "/ffmpeg-core.js", "text/javascript");
+                    appendLog("[✓] Core JavaScript downloaded");
+                    var wasmURL = await fetchAsBlobURL(coreBase + "/ffmpeg-core.wasm", "application/wasm", 180000);
+                    appendLog("[✓] WASM downloaded (about 32 MB)");
+
+                    instance = new BrowserFFmpeg();
+                    instance.on("log", function (event) {
+                        if (event && event.message) appendLog(event.message);
+                    });
+                    instance.on("progress", function (event) {
+                        var ratio = event && Number.isFinite(event.progress) ? event.progress : 0;
+                        var encodePercent = clamp(ratio * 100, 0, 100);
+                        var overall = 15 + encodePercent * 0.75;
+                        setProgress(overall, "កំពុង Encode HQ 1080P... " + Math.round(encodePercent) + "%");
+                    });
+
+                    await instance.load({ coreURL: coreURL, wasmURL: wasmURL });
+                    ffmpegInstance = instance;
+                    ffmpegLoaded = true;
+                    appendLog("[✓] ffmpeg.wasm ready — classic worker bridge");
+                    return instance;
+                } catch (error) {
+                    lastError = error;
+                    if (instance) {
+                        try { instance.terminate(); } catch (_) {}
+                    }
+                    appendLog("[!] Core CDN failed: " + (error.message || String(error)));
+                }
+            }
+
+            throw new Error("មិនអាចផ្ទុក FFmpeg core បានទេ។ " +
+                (lastError ? (lastError.message || String(lastError)) : "Unknown error"));
+        })();
+
+        try {
+            return await ffmpegLoadPromise;
+        } catch (error) {
+            ffmpegLoadPromise = null;
+            ffmpegInstance = null;
+            ffmpegLoaded = false;
+            throw error;
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // MP4 fake-sample timing patch
+    //
+    // A 60 FPS stream normally uses one real sample every 1/60 second.
+    // For the 600 FPS metadata result, every real sample is followed by
+    // nine zero-byte samples. stts delta is divided by 10, stsc sample
+    // counts are multiplied by 10, and sync-sample indices are remapped.
+    // The real media bytes and total duration remain unchanged.
+    // ─────────────────────────────────────────────────────────────
+    function mp4View(bytes) {
+        return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    }
+
+    function mp4ReadU32(bytes, offset) {
+        return mp4View(bytes).getUint32(offset, false);
+    }
+
+    function mp4ReadU64(bytes, offset) {
+        return Number(mp4View(bytes).getBigUint64(offset, false));
+    }
+
+    function mp4TypeAt(bytes, offset) {
+        return String.fromCharCode(bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]);
+    }
+
+    function mp4ParseBoxes(bytes, start, end) {
+        var boxes = [];
+        var position = start;
+
+        while (position + 8 <= end) {
+            var size = mp4ReadU32(bytes, position);
+            var headerSize = 8;
+            var type = mp4TypeAt(bytes, position + 4);
+
+            if (size === 1) {
+                if (position + 16 > end) throw new Error("Invalid extended MP4 box: " + type);
+                size = mp4ReadU64(bytes, position + 8);
+                headerSize = 16;
+            } else if (size === 0) {
+                size = end - position;
+            }
+
+            if (!Number.isFinite(size) || size < headerSize || position + size > end) {
+                throw new Error("Invalid MP4 box " + type + " at byte " + position);
+            }
+
+            boxes.push({
+                type: type,
+                start: position,
+                size: size,
+                end: position + size,
+                headerSize: headerSize,
+                payloadStart: position + headerSize
+            });
+            position += size;
+        }
+
+        if (position !== end) throw new Error("Invalid trailing MP4 data: " + (end - position) + " bytes");
+        return boxes;
+    }
+
+    function mp4U32(value) {
+        var bytes = new Uint8Array(4);
+        new DataView(bytes.buffer).setUint32(0, value >>> 0, false);
+        return bytes;
+    }
+
+    function mp4Ascii(value) {
+        var bytes = new Uint8Array(value.length);
+        for (var i = 0; i < value.length; i++) bytes[i] = value.charCodeAt(i);
+        return bytes;
+    }
+
+    function mp4Concat(parts) {
+        var total = 0;
+        for (var i = 0; i < parts.length; i++) total += parts[i].byteLength;
+        var output = new Uint8Array(total);
+        var offset = 0;
+        for (var j = 0; j < parts.length; j++) {
+            output.set(parts[j], offset);
+            offset += parts[j].byteLength;
+        }
+        return output;
+    }
+
+    function mp4MakeBox(type, payload) {
+        if (payload.byteLength + 8 > 0xffffffff) throw new Error("MP4 box is too large: " + type);
+        return mp4Concat([mp4U32(payload.byteLength + 8), mp4Ascii(type), payload]);
+    }
+
+    function mp4CopyBox(bytes, box) {
+        return bytes.slice(box.start, box.end);
+    }
+
+    function mp4FindChild(bytes, parent, type) {
+        var children = mp4ParseBoxes(bytes, parent.payloadStart, parent.end);
+        for (var i = 0; i < children.length; i++) {
+            if (children[i].type === type) return children[i];
+        }
+        return null;
+    }
+
+    function mp4HandlerType(bytes, trak) {
+        var mdia = mp4FindChild(bytes, trak, "mdia");
+        if (!mdia) return "";
+        var hdlr = mp4FindChild(bytes, mdia, "hdlr");
+        if (!hdlr || hdlr.payloadStart + 12 > hdlr.end) return "";
+        return mp4TypeAt(bytes, hdlr.payloadStart + 8);
+    }
+
+    function mp4ReadMdhd(bytes, mdhd) {
+        var version = bytes[mdhd.payloadStart];
+        if (version === 1) {
+            return {
+                timescale: mp4ReadU32(bytes, mdhd.payloadStart + 20),
+                duration: mp4ReadU64(bytes, mdhd.payloadStart + 24)
+            };
+        }
+        return {
+            timescale: mp4ReadU32(bytes, mdhd.payloadStart + 12),
+            duration: mp4ReadU32(bytes, mdhd.payloadStart + 16)
+        };
+    }
+
+    function mp4PatchStts(bytes, box, multiplier) {
+        var payloadStart = box.payloadStart;
+        var entryCount = mp4ReadU32(bytes, payloadStart + 4);
+        var payload = new Uint8Array(8 + entryCount * 8);
+        payload.set(bytes.slice(payloadStart, payloadStart + 4), 0);
+        var view = new DataView(payload.buffer);
+        view.setUint32(4, entryCount, false);
+
+        var oldDuration = 0;
+        var newDuration = 0;
+        var declaredSamples = 0;
+
+        for (var i = 0; i < entryCount; i++) {
+            var count = mp4ReadU32(bytes, payloadStart + 8 + i * 8);
+            var delta = mp4ReadU32(bytes, payloadStart + 12 + i * 8);
+            if (delta % multiplier !== 0) {
+                throw new Error("MP4 sample delta " + delta + " cannot be divided exactly by " + multiplier);
+            }
+
+            var newCount = count * multiplier;
+            var newDelta = delta / multiplier;
+            if (newCount > 0xffffffff || newDelta < 1) throw new Error("Invalid patched MP4 timing values");
+
+            view.setUint32(8 + i * 8, newCount, false);
+            view.setUint32(12 + i * 8, newDelta, false);
+            oldDuration += count * delta;
+            newDuration += newCount * newDelta;
+            declaredSamples += newCount;
+        }
+
+        return {
+            bytes: mp4MakeBox("stts", payload),
+            oldDuration: oldDuration,
+            newDuration: newDuration,
+            declaredSamples: declaredSamples
+        };
+    }
+
+    function mp4PatchStsz(bytes, box, multiplier) {
+        var payloadStart = box.payloadStart;
+        var fixedSampleSize = mp4ReadU32(bytes, payloadStart + 4);
+        var realSamples = mp4ReadU32(bytes, payloadStart + 8);
+        var declaredSamples = realSamples * multiplier;
+        if (declaredSamples > 0xffffffff) throw new Error("Too many declared MP4 samples");
+
+        var payload = new Uint8Array(12 + declaredSamples * 4);
+        payload.set(bytes.slice(payloadStart, payloadStart + 4), 0);
+        var view = new DataView(payload.buffer);
+        view.setUint32(4, 0, false); // convert to per-sample size table
+        view.setUint32(8, declaredSamples, false);
+
+        var writeOffset = 12;
+        for (var i = 0; i < realSamples; i++) {
+            var realSize = fixedSampleSize || mp4ReadU32(bytes, payloadStart + 12 + i * 4);
+            view.setUint32(writeOffset, realSize, false);
+            writeOffset += 4;
+            for (var fake = 1; fake < multiplier; fake++) {
+                view.setUint32(writeOffset, 0, false);
+                writeOffset += 4;
+            }
+        }
+
+        return {
+            bytes: mp4MakeBox("stsz", payload),
+            realSamples: realSamples,
+            declaredSamples: declaredSamples
+        };
+    }
+
+    function mp4PatchStsc(bytes, box, multiplier) {
+        var payload = bytes.slice(box.payloadStart, box.end);
+        var view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+        var entryCount = view.getUint32(4, false);
+
+        for (var i = 0; i < entryCount; i++) {
+            var offset = 8 + i * 12 + 4;
+            var samplesPerChunk = view.getUint32(offset, false);
+            var patchedCount = samplesPerChunk * multiplier;
+            if (patchedCount > 0xffffffff) throw new Error("MP4 samples-per-chunk overflow");
+            view.setUint32(offset, patchedCount, false);
+        }
+        return mp4MakeBox("stsc", payload);
+    }
+
+    function mp4PatchStss(bytes, box, multiplier) {
+        var payload = bytes.slice(box.payloadStart, box.end);
+        var view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+        var entryCount = view.getUint32(4, false);
+
+        for (var i = 0; i < entryCount; i++) {
+            var offset = 8 + i * 4;
+            var oldSampleNumber = view.getUint32(offset, false);
+            view.setUint32(offset, (oldSampleNumber - 1) * multiplier + 1, false);
+        }
+        return mp4MakeBox("stss", payload);
+    }
+
+    function mp4PatchCtts(bytes, box, multiplier) {
+        var payload = bytes.slice(box.payloadStart, box.end);
+        var view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+        var entryCount = view.getUint32(4, false);
+        for (var i = 0; i < entryCount; i++) {
+            var offset = 8 + i * 8;
+            var oldCount = view.getUint32(offset, false);
+            view.setUint32(offset, oldCount * multiplier, false);
+        }
+        return mp4MakeBox("ctts", payload);
+    }
+
+    function mp4PatchSdtp(bytes, box, multiplier) {
+        var source = bytes.slice(box.payloadStart, box.end);
+        if (source.byteLength < 4) return mp4CopyBox(bytes, box);
+        var realCount = source.byteLength - 4;
+        var payload = new Uint8Array(4 + realCount * multiplier);
+        payload.set(source.slice(0, 4), 0);
+        var offset = 4;
+        for (var i = 0; i < realCount; i++) {
+            payload[offset++] = source[4 + i];
+            for (var fake = 1; fake < multiplier; fake++) payload[offset++] = 0;
+        }
+        return mp4MakeBox("sdtp", payload);
+    }
+
+    function mp4PatchStdp(bytes, box, multiplier) {
+        var source = bytes.slice(box.payloadStart, box.end);
+        if (source.byteLength < 4 || (source.byteLength - 4) % 2 !== 0) return mp4CopyBox(bytes, box);
+        var realCount = (source.byteLength - 4) / 2;
+        var payload = new Uint8Array(4 + realCount * multiplier * 2);
+        payload.set(source.slice(0, 4), 0);
+        var sourceView = new DataView(source.buffer, source.byteOffset, source.byteLength);
+        var outputView = new DataView(payload.buffer);
+        var offset = 4;
+        for (var i = 0; i < realCount; i++) {
+            outputView.setUint16(offset, sourceView.getUint16(4 + i * 2, false), false);
+            offset += 2;
+            for (var fake = 1; fake < multiplier; fake++) {
+                outputView.setUint16(offset, 0, false);
+                offset += 2;
+            }
+        }
+        return mp4MakeBox("stdp", payload);
+    }
+
+    function mp4PatchStco(bytes, box, offsetDelta) {
+        var payload = bytes.slice(box.payloadStart, box.end);
+        var view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+        var entryCount = view.getUint32(4, false);
+        for (var i = 0; i < entryCount; i++) {
+            var offset = 8 + i * 4;
+            var patched = view.getUint32(offset, false) + offsetDelta;
+            if (patched < 0 || patched > 0xffffffff) throw new Error("MP4 stco offset overflow");
+            view.setUint32(offset, patched, false);
+        }
+        return mp4MakeBox("stco", payload);
+    }
+
+    function mp4PatchCo64(bytes, box, offsetDelta) {
+        var payload = bytes.slice(box.payloadStart, box.end);
+        var view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+        var entryCount = view.getUint32(4, false);
+        for (var i = 0; i < entryCount; i++) {
+            var offset = 8 + i * 8;
+            view.setBigUint64(offset, view.getBigUint64(offset, false) + BigInt(offsetDelta), false);
+        }
+        return mp4MakeBox("co64", payload);
+    }
+
+    function mp4RewriteContainer(bytes, box, childWriter) {
+        var children = mp4ParseBoxes(bytes, box.payloadStart, box.end);
+        var outputChildren = [];
+        for (var i = 0; i < children.length; i++) outputChildren.push(childWriter(children[i]));
+        return mp4MakeBox(box.type, mp4Concat(outputChildren));
+    }
+
+    function mp4RewriteStbl(bytes, box, isVideo, multiplier, offsetDelta, stats) {
+        return mp4RewriteContainer(bytes, box, function (child) {
+            if (isVideo && child.type === "stts") {
+                var timing = mp4PatchStts(bytes, child, multiplier);
+                stats.oldDuration = timing.oldDuration;
+                stats.newDuration = timing.newDuration;
+                stats.declaredSamplesFromTiming = timing.declaredSamples;
+                return timing.bytes;
+            }
+            if (isVideo && child.type === "stsz") {
+                var sizes = mp4PatchStsz(bytes, child, multiplier);
+                stats.realSamples = sizes.realSamples;
+                stats.declaredSamples = sizes.declaredSamples;
+                return sizes.bytes;
+            }
+            if (isVideo && child.type === "stsc") return mp4PatchStsc(bytes, child, multiplier);
+            if (isVideo && child.type === "stss") return mp4PatchStss(bytes, child, multiplier);
+            if (isVideo && child.type === "ctts") return mp4PatchCtts(bytes, child, multiplier);
+            if (isVideo && child.type === "sdtp") return mp4PatchSdtp(bytes, child, multiplier);
+            if (isVideo && child.type === "stdp") return mp4PatchStdp(bytes, child, multiplier);
+            if (child.type === "stco") return mp4PatchStco(bytes, child, offsetDelta);
+            if (child.type === "co64") return mp4PatchCo64(bytes, child, offsetDelta);
+            return mp4CopyBox(bytes, child);
+        });
+    }
+
+    function mp4RewriteMinf(bytes, box, isVideo, multiplier, offsetDelta, stats) {
+        return mp4RewriteContainer(bytes, box, function (child) {
+            if (child.type === "stbl") return mp4RewriteStbl(bytes, child, isVideo, multiplier, offsetDelta, stats);
+            return mp4CopyBox(bytes, child);
+        });
+    }
+
+    function mp4RewriteMdia(bytes, box, isVideo, multiplier, offsetDelta, stats) {
+        return mp4RewriteContainer(bytes, box, function (child) {
+            if (child.type === "minf") return mp4RewriteMinf(bytes, child, isVideo, multiplier, offsetDelta, stats);
+            return mp4CopyBox(bytes, child);
+        });
+    }
+
+    function mp4RewriteTrak(bytes, box, isVideo, multiplier, offsetDelta, stats) {
+        return mp4RewriteContainer(bytes, box, function (child) {
+            if (child.type === "mdia") return mp4RewriteMdia(bytes, child, isVideo, multiplier, offsetDelta, stats);
+            return mp4CopyBox(bytes, child);
+        });
+    }
+
+    function mp4RewriteMoov(bytes, moov, multiplier, offsetDelta, stats) {
+        return mp4RewriteContainer(bytes, moov, function (child) {
+            if (child.type === "trak") {
+                return mp4RewriteTrak(bytes, child, mp4HandlerType(bytes, child) === "vide", multiplier, offsetDelta, stats);
+            }
+            return mp4CopyBox(bytes, child);
+        });
+    }
+
+    function patchMp4FakeSamples(inputBytes, multiplier) {
+        var bytes = inputBytes instanceof Uint8Array ? inputBytes : new Uint8Array(inputBytes);
+        var topLevel = mp4ParseBoxes(bytes, 0, bytes.byteLength);
+        var moov = null;
+        var mdat = null;
+        var videoTrak = null;
+
+        for (var i = 0; i < topLevel.length; i++) {
+            if (topLevel[i].type === "moov") moov = topLevel[i];
+            if (topLevel[i].type === "mdat" && !mdat) mdat = topLevel[i];
+        }
+        if (!moov || !mdat) throw new Error("MP4 patch requires both moov and mdat boxes");
+
+        var moovChildren = mp4ParseBoxes(bytes, moov.payloadStart, moov.end);
+        for (var j = 0; j < moovChildren.length; j++) {
+            if (moovChildren[j].type === "trak" && mp4HandlerType(bytes, moovChildren[j]) === "vide") {
+                videoTrak = moovChildren[j];
+                break;
+            }
+        }
+        if (!videoTrak) throw new Error("MP4 video track was not found");
+
+        var mdia = mp4FindChild(bytes, videoTrak, "mdia");
+        var mdhd = mdia ? mp4FindChild(bytes, mdia, "mdhd") : null;
+        if (!mdhd) throw new Error("MP4 mdhd timing box was not found");
+        var mediaTiming = mp4ReadMdhd(bytes, mdhd);
+        if (!mediaTiming.timescale) throw new Error("Invalid MP4 video timescale");
+
+        var placeholderStats = {};
+        var placeholderMoov = mp4RewriteMoov(bytes, moov, multiplier, 0, placeholderStats);
+
+        var newMdatStart = 0;
+        for (var k = 0; k < topLevel.length; k++) {
+            if (topLevel[k] === mdat) break;
+            newMdatStart += topLevel[k] === moov ? placeholderMoov.byteLength : topLevel[k].size;
+        }
+
+        var oldMdatDataStart = mdat.payloadStart;
+        var newMdatDataStart = newMdatStart + mdat.headerSize;
+        var offsetDelta = newMdatDataStart - oldMdatDataStart;
+
+        var finalStats = {};
+        var finalMoov = mp4RewriteMoov(bytes, moov, multiplier, offsetDelta, finalStats);
+        if (finalMoov.byteLength !== placeholderMoov.byteLength) {
+            throw new Error("MP4 moov size changed between patch passes");
+        }
+        if (finalStats.realSamples * multiplier !== finalStats.declaredSamples ||
+            finalStats.declaredSamples !== finalStats.declaredSamplesFromTiming) {
+            throw new Error("MP4 sample-table counts are inconsistent");
+        }
+        if (finalStats.oldDuration !== finalStats.newDuration) {
+            throw new Error("MP4 patch would change the video duration");
+        }
+
+        var outputParts = [];
+        for (var n = 0; n < topLevel.length; n++) {
+            outputParts.push(topLevel[n] === moov ? finalMoov : mp4CopyBox(bytes, topLevel[n]));
+        }
+        var output = mp4Concat(outputParts);
+
+        finalStats.timescale = mediaTiming.timescale;
+        finalStats.inputFPS = finalStats.realSamples / (finalStats.oldDuration / mediaTiming.timescale);
+        finalStats.patchedFPS = finalStats.declaredSamples / (finalStats.newDuration / mediaTiming.timescale);
+        finalStats.fakeSamples = finalStats.declaredSamples - finalStats.realSamples;
+        finalStats.offsetDelta = offsetDelta;
+        finalStats.outputBytes = output.byteLength;
+
+        return { bytes: output, stats: finalStats };
+    }
+
+    function getBrowserVideoMetadata(file) {
+        return new Promise(function (resolve) {
+            var video = document.createElement("video");
+            var objectURL = URL.createObjectURL(file);
+            var finished = false;
+
+            function complete(value) {
+                if (finished) return;
+                finished = true;
+                URL.revokeObjectURL(objectURL);
+                video.removeAttribute("src");
+                video.load();
+                resolve(value);
+            }
+
+            video.preload = "metadata";
+            video.muted = true;
+            video.onloadedmetadata = function () {
+                complete({
+                    duration: Number(video.duration) || 0,
+                    width: Number(video.videoWidth) || 0,
+                    height: Number(video.videoHeight) || 0
+                });
+            };
+            video.onerror = function () { complete(null); };
+            video.src = objectURL;
+            setTimeout(function () { complete(null); }, 12000);
+        });
+    }
+
+    function getSelectedBitrateMbps() {
+        return clamp(
+            parseFloat(bitrateSlider.value) || DEFAULT_VIDEO_BITRATE_MBPS,
+            MIN_VIDEO_BITRATE_MBPS,
+            MAX_VIDEO_BITRATE_MBPS
+        );
+    }
+
+    function updateBitrateLabel() {
+        bitrateValue.textContent = getSelectedBitrateMbps().toFixed(0) + " Mbps";
+        updateOutputRule(selectedMetadata);
+    }
+
+    function updateSpeedLabel() {
+        var labels = {
+            "1": "Maximum efficiency",
+            "2": "High efficiency",
+            "3": "Balanced",
+            "4": "Fast",
+            "5": "Very fast"
+        };
+        speedValue.textContent = labels[speedSlider.value] || "Balanced";
+    }
+
+    function getPreset() {
+        var presets = {
+            "1": "slow",
+            "2": "medium",
+            "3": "fast",
+            "4": "veryfast",
+            "5": "ultrafast"
+        };
+        return presets[speedSlider.value] || "fast";
+    }
+
+    function evenDimension(value) {
+        return Math.max(2, Math.round(Number(value) / 2) * 2);
+    }
+
+    function calculateOutputDimensions(metadata) {
+        if (!metadata || !metadata.width || !metadata.height) return null;
+        var width = metadata.width;
+        var height = metadata.height;
+        var longEdge = Math.max(width, height);
+        if (longEdge <= MAX_OUTPUT_LONG_EDGE) {
+            return { width: evenDimension(width), height: evenDimension(height), downscaled: false };
+        }
+        var ratio = MAX_OUTPUT_LONG_EDGE / longEdge;
+        return {
+            width: evenDimension(width * ratio),
+            height: evenDimension(height * ratio),
+            downscaled: true
+        };
+    }
+
+    function updateOutputRule(metadata) {
+        var output = calculateOutputDimensions(metadata);
+        if (!output) {
+            outputRuleText.textContent = "Output rule: រក្សា Resolution ដើមនៅពេលវាមិនលើស 1080P; 4K/2K នឹងបន្ថយ long edge ទៅ 1920px ដោយ Lanczos។ Target bitrate ≈ " + getSelectedBitrateMbps().toFixed(0) + " Mbps និង metadata ≈ 600 FPS។";
+            return;
+        }
+        if (output.downscaled) {
+            outputRuleText.textContent = "Output: " + output.width + "×" + output.height + " (បន្ថយពី " + metadata.width + "×" + metadata.height + ") • Target ≈ " + getSelectedBitrateMbps().toFixed(0) + " Mbps • Lanczos • Real 60 FPS → Metadata ≈ 600 FPS។";
+        } else {
+            outputRuleText.textContent = "Output: " + output.width + "×" + output.height + " (រក្សា Resolution ដើម) • Target ≈ " + getSelectedBitrateMbps().toFixed(0) + " Mbps • Real 60 FPS → Metadata ≈ 600 FPS។";
+        }
+    }
+
+    function getScaleFilter() {
+        // Never upscale. Landscape 4K becomes 1920×1080; portrait 4K becomes 1080×1920.
+        // -2 lets FFmpeg calculate an even companion dimension.
+        return "scale='if(gte(iw,ih),min(" + MAX_OUTPUT_LONG_EDGE + ",iw),-2)':'if(gte(iw,ih),-2,min(" + MAX_OUTPUT_LONG_EDGE + ",ih))':flags=lanczos,setsar=1";
+    }
+
+    function setActiveTool(toolName) {
+        var showCompress = toolName === "compress";
+        compressTabBtn.classList.toggle("active", showCompress);
+        statisticsTabBtn.classList.toggle("active", !showCompress);
+        compressView.classList.toggle("hidden-view", !showCompress);
+        statisticsView.classList.toggle("hidden-view", showCompress);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function showStatisticsResults(showContent) {
+        statsResults.classList.remove("hidden");
+        statsShell.classList.add("has-results");
+        statsResultContent.classList.toggle("hidden", !showContent);
+    }
+
+    function hideStatisticsResults() {
+        statsResults.classList.add("hidden");
+        statsResultContent.classList.add("hidden");
+        statsShell.classList.remove("has-results");
+    }
+
+    function resetStatisticsTechnicalValues() {
+        statsResolution.textContent = "—";
+        statsFps.textContent = "—";
+        statsBitrate.textContent = "—";
+        statsDuration.textContent = "—";
+        statsSize.textContent = "—";
+        statsQuality.textContent = "Quality result will appear here";
+    }
+
+    function extractTikTokHandle(authorURL) {
+        if (!authorURL) return "@username";
+        var match = String(authorURL).match(/@([^/?#]+)/);
+        return match ? "@" + match[1] : "@username";
+    }
+
+    function setTikTokThumbnail(url) {
+        if (url) {
+            statsThumbImage.src = url;
+            statsThumbImage.classList.remove("hidden");
+            statsThumbPlaceholder.classList.add("hidden");
+        } else {
+            statsThumbImage.removeAttribute("src");
+            statsThumbImage.classList.add("hidden");
+            statsThumbPlaceholder.classList.remove("hidden");
+        }
+    }
+
+    function setStatisticsServerState(state, text) {
+        statsServerState.classList.remove("ready", "error");
+        if (state) statsServerState.classList.add(state);
+        var label = statsServerState.querySelector("span:last-child");
+        if (label) label.textContent = text;
+    }
+
+    async function checkStatisticsServer() {
+        try {
+            var response = await fetch("/api/health", { cache: "no-store" });
+            var data = await response.json();
+            if (!response.ok || !data.ok) throw new Error("Server unavailable");
+            if (data.api_version !== "15.0") {
+                throw new Error(
+                    "Wrong/old backend is running. Start V15 and open http://localhost:8015"
+                );
+            }
+            if (!data.yt_dlp) {
+                setStatisticsServerState("error", "V15 server ready, but yt-dlp is not installed");
+            } else if (!data.ffmpeg_probe) {
+                setStatisticsServerState("error", "V15 metadata works, but FFmpeg is unavailable");
+            } else {
+                setStatisticsServerState(
+                    "ready",
+                    "V15 ready — fast MP4 range scan and result cache enabled"
+                );
+            }
+        } catch (_) {
+            setStatisticsServerState(
+                "error",
+                "Statistics backend not running — start with: python server.py"
+            );
+        }
+    }
+
+    async function fetchTikTokServerStatistics(url) {
+        var response = await fetch("/api/tiktok-stats?url=" + encodeURIComponent(url), {
+            method: "GET",
+            cache: "no-store",
+            headers: { "Accept": "application/json" }
+        });
+        var data;
+        try {
+            data = await response.json();
+        } catch (_) {
+            throw new Error("The local statistics server returned an invalid response.");
+        }
+        if (!response.ok || !data.ok) {
+            throw new Error(data && data.error ? data.error : "TikTok statistics request failed.");
+        }
+        if (data.api_version !== "15.0") {
+            throw new Error(
+                "Old Statistics API response detected. Stop old servers and open http://localhost:8015"
+            );
+        }
+        return data;
+    }
+
+    function applyTikTokServerStatistics(info) {
+        statsAuthor.textContent = info.author_name || "TikTok creator";
+        statsHandle.textContent = info.handle
+            ? (String(info.handle).charAt(0) === "@" ? info.handle : "@" + info.handle)
+            : "@username";
+        statsCaption.textContent = info.caption || "TikTok video";
+        setTikTokThumbnail(info.thumbnail_data_url || info.thumbnail_url || "");
+
+        var hasResolution = Number(info.width) > 0 && Number(info.height) > 0;
+        var fps = Number(info.fps) || 0;
+        var bitrateMbps = Number(info.bitrate_mbps) || 0;
+        var duration = Number(info.duration) || 0;
+        var fileSize = Number(info.filesize_bytes) || 0;
+
+        statsResolution.textContent = hasResolution
+            ? Math.round(info.width) + "×" + Math.round(info.height)
+            : "Unavailable";
+        statsFps.textContent = fps
+            ? (info.fps_estimated ? "~" : "") +
+                (Math.abs(fps - Math.round(fps)) < .05 ? Math.round(fps) : fps.toFixed(2)) +
+                " fps"
+            : (info.fps_status || "Could not detect after deep check");
+        statsBitrate.textContent = bitrateMbps
+            ? (info.bitrate_estimated ? "~" : "") + bitrateMbps.toFixed(2) + " Mbps"
+            : "Unavailable";
+        statsDuration.textContent = duration ? formatDuration(duration) : "Unavailable";
+        statsSize.textContent = fileSize
+            ? (info.filesize_estimated ? "~" : "") + formatBytes(fileSize)
+            : "Unavailable";
+
+        if (hasResolution) {
+            statsQuality.textContent = getQualityLabel(
+                { width: Number(info.width), height: Number(info.height) },
+                fps,
+                bitrateMbps
+            );
+        } else {
+            statsQuality.textContent = "Partial result — TikTok did not expose enough stream data";
+        }
+        if (!fps && hasResolution) {
+            statsQuality.textContent = "Partial result — resolution detected, but FPS could not be verified";
+        }
+
+        if (fps && info.fps_source) {
+            var fpsSourceLabel = {
+                "yt-dlp": "TikTok metadata",
+                "format-name": "stream format label",
+                "frame-count": "frame-count calculation",
+                "ffmpeg-header": "FFmpeg stream header",
+                "ffmpeg-tbr": "FFmpeg nominal stream rate",
+                "ffmpeg-progress": "FFmpeg decoded-frame timing",
+                "temporary-download": "temporary local-file probe",
+                "mp4-sample-table": "MP4 stts sample table",
+                "remote-mp4-range": "fast MP4 range scan"
+            }[info.fps_source] || info.fps_source;
+            info.message = (info.message || "TikTok stream metadata loaded.") +
+                " FPS source: " + fpsSourceLabel + ".";
+        }
+        return hasResolution || fps || bitrateMbps || duration || fileSize;
+    }
+
+    async function fetchTikTokOEmbed(url) {
+        var endpoint = "https://www.tiktok.com/oembed?url=" + encodeURIComponent(url);
+        var response = await fetch(endpoint, {
+            method: "GET",
+            mode: "cors",
+            cache: "no-store"
+        });
+        if (!response.ok) {
+            throw new Error("TikTok returned HTTP " + response.status);
+        }
+        return response.json();
+    }
+
+    function estimatePlaybackFPS(file) {
+        return new Promise(function (resolve) {
+            var video = document.createElement("video");
+            var objectURL = URL.createObjectURL(file);
+            var mediaTimes = [];
+            var finished = false;
+            var timeoutId = null;
+
+            function cleanup(result) {
+                if (finished) return;
+                finished = true;
+                clearTimeout(timeoutId);
+                try { video.pause(); } catch (_) {}
+                URL.revokeObjectURL(objectURL);
+                video.removeAttribute("src");
+                video.load();
+                resolve(result);
+            }
+
+            function calculate() {
+                if (mediaTimes.length < 4) return null;
+                var differences = [];
+                for (var i = 1; i < mediaTimes.length; i++) {
+                    var difference = mediaTimes[i] - mediaTimes[i - 1];
+                    if (difference > 0.001 && difference < 1) differences.push(difference);
+                }
+                if (!differences.length) return null;
+                differences.sort(function (a, b) { return a - b; });
+                var median = differences[Math.floor(differences.length / 2)];
+                var fps = 1 / median;
+                if (!Number.isFinite(fps) || fps < 1 || fps > 1000) return null;
+                var commonRates = [23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60, 90, 120, 144, 240, 600];
+                var nearest = commonRates[0];
+                for (var j = 1; j < commonRates.length; j++) {
+                    if (Math.abs(commonRates[j] - fps) < Math.abs(nearest - fps)) nearest = commonRates[j];
+                }
+                return Math.abs(nearest - fps) <= Math.max(0.8, nearest * 0.025) ? nearest : fps;
+            }
+
+            function frameCallback(now, metadata) {
+                if (Number.isFinite(metadata.mediaTime)) {
+                    var last = mediaTimes.length ? mediaTimes[mediaTimes.length - 1] : -1;
+                    if (metadata.mediaTime > last) mediaTimes.push(metadata.mediaTime);
+                }
+                if (mediaTimes.length >= 45 || video.ended) {
+                    cleanup(calculate());
+                    return;
+                }
+                video.requestVideoFrameCallback(frameCallback);
+            }
+
+            video.muted = true;
+            video.playsInline = true;
+            video.preload = "auto";
+            video.onloadeddata = async function () {
+                if (typeof video.requestVideoFrameCallback !== "function") {
+                    cleanup(null);
+                    return;
+                }
+                timeoutId = setTimeout(function () { cleanup(calculate()); }, 3500);
+                try {
+                    await video.play();
+                    video.requestVideoFrameCallback(frameCallback);
+                } catch (_) {
+                    cleanup(null);
+                }
+            };
+            video.onerror = function () { cleanup(null); };
+            video.src = objectURL;
+        });
+    }
+
+    function getQualityLabel(metadata, fps, averageMbps) {
+        if (!metadata) return "Select a downloaded TikTok video for a technical quality result";
+        var longEdge = Math.max(metadata.width || 0, metadata.height || 0);
+        var shortEdge = Math.min(metadata.width || 0, metadata.height || 0);
+        var fpsValue = Number(fps) || 0;
+        var bitrateValue = Number(averageMbps) || 0;
+
+        if (longEdge >= 1920 && shortEdge >= 1080 && fpsValue >= 59 && bitrateValue >= 8) {
+            return "Excellent — 1080P, approximately 60 FPS and strong bitrate";
+        }
+        if (longEdge >= 1280 && shortEdge >= 720 && fpsValue >= 29 && bitrateValue >= 3) {
+            return "Good — suitable TikTok playback quality";
+        }
+        return "Needs improvement — resolution, FPS or bitrate is relatively low";
+    }
+
+    async function analyseStatisticsFile(file, token) {
+        var metadata = await getBrowserVideoMetadata(file);
+        if (token !== statsAnalysisToken) return;
+
+        if (!metadata) {
+            throw new Error("Browser could not read this video's metadata.");
+        }
+
+        statsResolution.textContent = metadata.width + "×" + metadata.height;
+        statsDuration.textContent = formatDuration(metadata.duration);
+        statsSize.textContent = formatBytes(file.size);
+
+        var averageMbps = metadata.duration > 0
+            ? file.size * 8 / metadata.duration / 1000000
+            : 0;
+        statsBitrate.textContent = averageMbps
+            ? averageMbps.toFixed(2) + " Mbps"
+            : "—";
+
+        statsFps.textContent = "Measuring…";
+        var fps = await estimatePlaybackFPS(file);
+        if (token !== statsAnalysisToken) return;
+        statsFps.textContent = fps
+            ? (Math.abs(fps - Math.round(fps)) < 0.05 ? Math.round(fps) : fps.toFixed(2)) + " fps"
+            : "Unavailable";
+
+        statsQuality.textContent = getQualityLabel(metadata, fps, averageMbps);
+    }
+
+    function isLikelyTikTokURL(value) {
+        try {
+            var parsed = new URL(value);
+            return /(^|\.)tiktok\.com$/i.test(parsed.hostname);
+        } catch (_) {
+            return false;
+        }
+    }
+
+    async function runStatistics() {
+        var token = ++statsAnalysisToken;
+        var url = tiktokUrlInput.value.trim();
+
+        if (!url) {
+            showStatisticsResults(false);
+            setStatisticsServerState("error", "Please paste a TikTok video URL first.");
+            return;
+        }
+
+        if (!isLikelyTikTokURL(url)) {
+            showStatisticsResults(false);
+            setStatisticsServerState(
+                "error",
+                "Please enter a valid tiktok.com, vt.tiktok.com or vm.tiktok.com URL."
+            );
+            return;
+        }
+
+        getStatisticsBtn.disabled = true;
+        getStatisticsBtn.textContent = "Checking…";
+        showStatisticsResults(false);
+        setStatisticsServerState("", "⚡ Fast checking TikTok metadata and MP4 timing…");
+        resetStatisticsTechnicalValues();
+
+        try {
+            var serverInfo = await fetchTikTokServerStatistics(url);
+            if (token !== statsAnalysisToken) return;
+
+            applyTikTokServerStatistics(serverInfo);
+            showStatisticsResults(true);
+            if (Number(serverInfo.fps) > 0) {
+                setStatisticsServerState(
+                    "ready",
+                    "✓ Check ready — FPS detected successfully"
+                );
+            } else {
+                setStatisticsServerState(
+                    "error",
+                    "Check completed — FPS could not be verified"
+                );
+            }
+
+            var notes = [];
+            if (serverInfo.message) notes.push(serverInfo.message);
+            if (serverInfo.warning) notes.push(serverInfo.warning);
+            statsStatus.textContent = notes.join(" ");
+        } catch (serverError) {
+            if (token !== statsAnalysisToken) return;
+
+            try {
+                var publicInfo = await fetchTikTokOEmbed(url);
+                if (token !== statsAnalysisToken) return;
+
+                statsAuthor.textContent = publicInfo.author_name || "TikTok creator";
+                statsHandle.textContent = extractTikTokHandle(publicInfo.author_url);
+                statsCaption.textContent = publicInfo.title || "TikTok video";
+                setTikTokThumbnail(publicInfo.thumbnail_url || "");
+
+                statsResolution.textContent = "Unavailable";
+                statsFps.textContent = "Unavailable";
+                statsBitrate.textContent = "Unavailable";
+                statsDuration.textContent = "Unavailable";
+                statsSize.textContent = "Unavailable";
+                statsQuality.textContent = "Technical stream statistics unavailable";
+
+                showStatisticsResults(true);
+                setStatisticsServerState(
+                    "error",
+                    "Public TikTok information loaded, but stream analysis failed"
+                );
+                statsStatus.textContent =
+                    (serverError.message || String(serverError)) +
+                    " Start V15 with START_V15.bat, then open http://localhost:8015.";
+            } catch (publicError) {
+                showStatisticsResults(false);
+                setStatisticsServerState(
+                    "error",
+                    publicError.message || String(publicError)
+                );
+            }
+        } finally {
+            if (token === statsAnalysisToken) {
+                getStatisticsBtn.disabled = false;
+                getStatisticsBtn.textContent = "⚡ Get Statistics";
+            }
+        }
+    }
+
+    async function handleFile(file) {
+        var isVideo = file.type && file.type.indexOf("video/") === 0;
+        var hasVideoExtension = /\.(mp4|mov|avi|mkv|webm|flv|wmv|m4v|3gp|ts|mts|m2ts)$/i.test(file.name);
+        if (!isVideo && !hasVideoExtension) {
+            appendLog("[!] សូមជ្រើសរើសឯកសារវីដេអូតែប៉ុណ្ណោះ");
+            return;
+        }
+
+        selectedFile = file;
+        selectedMetadata = null;
+        fileName.textContent = file.name;
+        fileSize.textContent = formatBytes(file.size);
+        fileInfo.classList.remove("hidden");
+        metadataRow.classList.add("hidden");
+        settingsCard.classList.remove("hidden");
+        compressBtn.classList.remove("hidden");
+        compressBtn.disabled = false;
+        progressCard.classList.add("hidden");
+        resultCard.classList.add("hidden");
+        clearLog();
+        appendLog("[i] Selected: " + file.name + " (" + formatBytes(file.size) + ")");
+        updateOutputRule(null);
+
+        var metadata = await getBrowserVideoMetadata(file);
+        if (selectedFile !== file) return;
+        selectedMetadata = metadata;
+
+        if (metadata) {
+            var averageMbps = metadata.duration > 0 ? file.size * 8 / metadata.duration / 1000000 : 0;
+            durationValue.textContent = formatDuration(metadata.duration);
+            resolutionValue.textContent = metadata.width && metadata.height ? metadata.width + "×" + metadata.height : "—";
+            sourceBitrateValue.textContent = averageMbps ? averageMbps.toFixed(2) + " Mbps" : "—";
+            metadataRow.classList.remove("hidden");
+            updateOutputRule(metadata);
+            var plannedOutput = calculateOutputDimensions(metadata);
+            appendLog("[i] Duration: " + formatDuration(metadata.duration) +
+                ", resolution: " + resolutionValue.textContent +
+                ", average bitrate: " + (averageMbps ? averageMbps.toFixed(2) + " Mbps" : "unknown"));
+            if (plannedOutput) {
+                appendLog("[i] Output resolution: " + plannedOutput.width + "×" + plannedOutput.height +
+                    (plannedOutput.downscaled ? " (4K/2K downscale)" : " (source resolution preserved)"));
+            }
+        } else {
+            appendLog("[!] Browser could not read metadata; FFmpeg will still try to process the file.");
+        }
+    }
+
+    function resetFile() {
+        selectedFile = null;
+        selectedMetadata = null;
+        fileInput.value = "";
+        fileInfo.classList.add("hidden");
+        metadataRow.classList.add("hidden");
+        settingsCard.classList.add("hidden");
+        compressBtn.classList.add("hidden");
+        progressCard.classList.add("hidden");
+        resultCard.classList.add("hidden");
+        clearLog();
+        if (downloadObjectURL) {
+            URL.revokeObjectURL(downloadObjectURL);
+            downloadObjectURL = null;
+        }
+    }
+
+    compressTabBtn.addEventListener("click", function () { setActiveTool("compress"); });
+    statisticsTabBtn.addEventListener("click", function () { setActiveTool("statistics"); });
+    getStatisticsBtn.addEventListener("click", runStatistics);
+    tiktokUrlInput.addEventListener("input", function () {
+        if (!getStatisticsBtn.disabled) hideStatisticsResults();
+    });
+    tiktokUrlInput.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") runStatistics();
+    });
+    statsThumbImage.addEventListener("error", function () { setTikTokThumbnail(""); });
+
+    dropZone.addEventListener("click", function () { fileInput.click(); });
+    dropZone.addEventListener("dragover", function (event) {
+        event.preventDefault();
+        dropZone.classList.add("drag-over");
+    });
+    dropZone.addEventListener("dragleave", function () { dropZone.classList.remove("drag-over"); });
+    dropZone.addEventListener("drop", function (event) {
+        event.preventDefault();
+        dropZone.classList.remove("drag-over");
+        if (event.dataTransfer.files && event.dataTransfer.files[0]) handleFile(event.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener("change", function () {
+        if (fileInput.files && fileInput.files[0]) handleFile(fileInput.files[0]);
+    });
+    removeFile.addEventListener("click", resetFile);
+
+    bitrateSlider.addEventListener("input", updateBitrateLabel);
+    speedSlider.addEventListener("input", updateSpeedLabel);
+    updateBitrateLabel();
+    updateSpeedLabel();
+    checkStatisticsServer();
+
+    logToggle.addEventListener("click", function () {
+        var visible = logPanel.classList.toggle("visible");
+        logToggle.textContent = visible ? "📋 កំណត់ហេតុ ▾" : "📋 កំណត់ហេតុ ▸";
+    });
+
+    compressBtn.addEventListener("click", async function () {
+        if (!selectedFile) return;
+
+        compressBtn.disabled = true;
+        compressBtn.textContent = "កំពុងដំណើរការ...";
+        progressCard.classList.remove("hidden");
+        resultCard.classList.add("hidden");
+        downloadLink.classList.add("hidden");
+        clearLog();
+        setProgress(2, "កំពុងរៀបចំ...");
+
+        var fileForJob = selectedFile;
+        var extensionMatch = fileForJob.name.match(/\.([^.]+)$/);
+        var inputExtension = extensionMatch ? extensionMatch[1].toLowerCase() : "mp4";
+        var inputName = "input_" + Date.now() + "." + inputExtension;
+        var outputName = "compressed_" + Date.now() + ".mp4";
+
+        try {
+            setProgress(5, "កំពុងផ្ទុក FFmpeg engine...");
+            var ffmpeg = await loadFFmpegEngine();
+
+            if (selectedFile !== fileForJob) throw new Error("ឯកសារត្រូវបានផ្លាស់ប្តូរ។ សូមចាប់ផ្តើមម្តងទៀត។");
+
+            setProgress(10, "កំពុងអានឯកសារ...");
+            var inputBytes = new Uint8Array(await fileForJob.arrayBuffer());
+            await ffmpeg.writeFile(inputName, inputBytes);
+            appendLog("[✓] Input copied to FFmpeg virtual file system");
+
+            var preset = getPreset();
+            var scaleFilter = getScaleFilter();
+            var copyAudioFirst = /^(mp4|mov|m4v)$/i.test(inputExtension);
+            var targetBitrateMbps = getSelectedBitrateMbps();
+            var peakBitrateMbps = Math.min(MAX_VIDEO_BITRATE_MBPS, targetBitrateMbps + 3);
+            var bufferSizeMbps = Math.max(50, peakBitrateMbps * 2);
+
+            function buildArgs(copyAudio) {
+                var command = [
+                    "-i", inputName,
+                    "-map", "0:v:0",
+                    "-map", "0:a?",
+                    "-vf", scaleFilter,
+                    "-c:v", "libx264",
+                    "-preset", preset,
+                    "-b:v", targetBitrateMbps.toFixed(0) + "M",
+                    "-maxrate", peakBitrateMbps.toFixed(0) + "M",
+                    "-bufsize", bufferSizeMbps.toFixed(0) + "M",
+                    "-profile:v", "high",
+                    "-pix_fmt", "yuv420p",
+                    "-r", String(OUTPUT_REAL_FPS),
+                    "-video_track_timescale", "90000",
+                    "-bf", "0"
+                ];
+                if (copyAudio) {
+                    command.push("-c:a", "copy");
+                } else {
+                    command.push("-c:a", "aac", "-b:a", FALLBACK_AUDIO_KBPS + "k");
+                }
+                command.push(
+                    "-sn",
+                    "-map_metadata", "0",
+                    "-movflags", "+faststart",
+                    outputName
+                );
+                return command;
+            }
+
+            var args = buildArgs(copyAudioFirst);
+            appendLog("[i] HQ bitrate mode: target " + targetBitrateMbps.toFixed(0) + " Mbps, peak cap " + peakBitrateMbps.toFixed(0) + " Mbps, buffer " + bufferSizeMbps.toFixed(0) + " Mbps");
+            appendLog("[i] Resolution rule: never upscale; max long edge = " + MAX_OUTPUT_LONG_EDGE + "px");
+            appendLog("[i] Preset: " + preset + ", real FPS: " + OUTPUT_REAL_FPS + ", audio: " + (copyAudioFirst ? "stream copy" : FALLBACK_AUDIO_KBPS + " kbps AAC"));
+            appendLog("[i] ffmpeg " + args.join(" "));
+
+            setProgress(15, "កំពុង Encode HQ 1080P...");
+            var exitCode = await ffmpeg.exec(args);
+            if (exitCode !== 0 && copyAudioFirst) {
+                appendLog("[!] Audio stream-copy was not compatible with MP4; retrying with high-quality AAC...");
+                try { await ffmpeg.deleteFile(outputName); } catch (_) {}
+                args = buildArgs(false);
+                appendLog("[i] ffmpeg " + args.join(" "));
+                exitCode = await ffmpeg.exec(args);
+            }
+            if (exitCode !== 0) throw new Error("FFmpeg exited with code " + exitCode);
+
+            setProgress(91, "កំពុងអានឯកសារលទ្ធផល...");
+            var outputData = await ffmpeg.readFile(outputName);
+            var outputBytes = outputData instanceof Uint8Array ? outputData : new TextEncoder().encode(outputData);
+            if (!outputBytes.byteLength) throw new Error("FFmpeg produced an empty output file");
+
+            setProgress(95, "កំពុង Patch metadata ទៅ 600 FPS...");
+            appendLog("[i] Applying fake-sample MP4 timing patch: " + FAKE_SAMPLE_MULTIPLIER + "×");
+            var patchResult = patchMp4FakeSamples(outputBytes, FAKE_SAMPLE_MULTIPLIER);
+            outputBytes = patchResult.bytes;
+            var patchStats = patchResult.stats;
+            appendLog("[✓] Real samples: " + patchStats.realSamples);
+            appendLog("[✓] Zero-byte fake samples: " + patchStats.fakeSamples);
+            appendLog("[✓] Total declared samples: " + patchStats.declaredSamples);
+            appendLog("[✓] FPS: " + patchStats.inputFPS.toFixed(2) + " → " + patchStats.patchedFPS.toFixed(2));
+            appendLog("[✓] Duration ticks preserved: " + patchStats.oldDuration);
+            appendLog("[✓] moov growth offset adjustment: " + patchStats.offsetDelta + " bytes");
+
+            if (Math.abs(patchStats.patchedFPS - TARGET_DECLARED_FPS) > 1) {
+                throw new Error("Patched FPS is " + patchStats.patchedFPS.toFixed(2) + ", not " + TARGET_DECLARED_FPS + ". Please retry.");
+            }
+
+            var finalBlob = new Blob([outputBytes], { type: "video/mp4" });
+            if (!finalBlob.size) throw new Error("Patched MP4 output is empty");
+
+            if (downloadObjectURL) URL.revokeObjectURL(downloadObjectURL);
+            downloadObjectURL = URL.createObjectURL(finalBlob);
+            downloadLink.href = downloadObjectURL;
+            var randomOutputFilename = createRandomOutputFilename();
+            downloadLink.download = randomOutputFilename;
+            appendLog("[i] Output filename: " + randomOutputFilename);
+            downloadLink.classList.remove("hidden");
+
+            beforeSize.textContent = formatBytes(fileForJob.size);
+            afterSize.textContent = formatBytes(finalBlob.size);
+            var savingPercent = (1 - finalBlob.size / fileForJob.size) * 100;
+            var finalDimensions = calculateOutputDimensions(selectedMetadata);
+            var resolutionSummary = finalDimensions ? finalDimensions.width + "×" + finalDimensions.height : "≤1920px long edge";
+            if (savingPercent > 0) {
+                savingText.textContent = "HQ " + resolutionSummary + " • Target " + targetBitrateMbps.toFixed(0) + " Mbps • Metadata ≈ 600 FPS • ទំហំតូចជាង " + savingPercent.toFixed(1) + "%";
+                savingText.classList.remove("warning");
+            } else {
+                savingText.textContent = "HQ " + resolutionSummary + " • Target " + targetBitrateMbps.toFixed(0) + " Mbps • Metadata ≈ 600 FPS • ទំហំធំជាង " + Math.abs(savingPercent).toFixed(1) + "%";
+                savingText.classList.add("warning");
+            }
+            resultCard.classList.remove("hidden");
+            setProgress(100, "រួចរាល់!");
+            appendLog("[✓] Complete HQ output: " + formatBytes(fileForJob.size) + " → " + formatBytes(finalBlob.size) + " • target " + targetBitrateMbps.toFixed(0) + " Mbps • declared ≈ 600 FPS");
+
+            try { await ffmpeg.deleteFile(inputName); } catch (_) {}
+            try { await ffmpeg.deleteFile(outputName); } catch (_) {}
+        } catch (error) {
+            showError(error);
+        } finally {
+            compressBtn.disabled = false;
+            compressBtn.textContent = "បម្លែង HQ 1080P + 25–40 Mbps + 600 FPS";
+        }
+    });
+
+    window.addEventListener("beforeunload", function () {
+        if (downloadObjectURL) URL.revokeObjectURL(downloadObjectURL);
+        generatedBlobURLs.forEach(function (url) { URL.revokeObjectURL(url); });
+        if (ffmpegInstance && typeof ffmpegInstance.terminate === "function") {
+            try { ffmpegInstance.terminate(); } catch (_) {}
+        }
+    });
+})();
+</script>
+</body>
+</html>
