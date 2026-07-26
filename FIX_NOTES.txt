@@ -1,0 +1,20 @@
+TheZiess Method — Fix Notes
+
+Fixed:
+- Replaced the corrupted/truncated index.html.
+- Restored the full HTML document and stylesheet link.
+- Kept the Telegram OIDC login button that redirects to /api/auth/telegram.
+- Kept style.css at the project root.
+- Generated src/changelog-data.mjs.
+
+Deploy:
+1. npm install
+2. npm run build
+3. git add .
+4. git commit -m "Restore complete HTML and CSS"
+5. git push origin main
+
+Vercel settings:
+- Framework Preset: Vite
+- Build Command: npm run build
+- Output Directory: dist
