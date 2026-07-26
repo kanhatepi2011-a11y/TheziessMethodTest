@@ -29,7 +29,8 @@ const MOBILE_SCROLL_DELAY_MS = 150;
 const DOWNLOAD_ANCHOR_CLEANUP_MS = 100;
 const SAFE_THUMBNAIL_PREFIX = "data:image/jpeg;base64,";
 
-const outputSuffix = "_NoBlur → @wymidk0";
+const OUTPUT_FILENAME_PREFIX = "@theziess.method_";
+const OUTPUT_RANDOM_DIGITS = 8;
 const supportedMimeTypes = [
     "video/mp4",
     "video/quicktime",
@@ -174,11 +175,22 @@ function isMovFile(file) {
     return false;
 }
 
-function getOutputFilename(file) {
-    const lastDotIndex = file.name.lastIndexOf(".");
-    const name =
-        lastDotIndex > 0 ? file.name.substring(0, lastDotIndex) : file.name;
-    return `${name}${outputSuffix}.mp4`;
+function generateRandomNumberString(length = OUTPUT_RANDOM_DIGITS) {
+    const digits = new Uint8Array(length);
+
+    if (globalThis.crypto?.getRandomValues) {
+        globalThis.crypto.getRandomValues(digits);
+    } else {
+        for (let index = 0; index < length; index += 1) {
+            digits[index] = Math.floor(Math.random() * 256);
+        }
+    }
+
+    return Array.from(digits, (value) => String(value % 10)).join("");
+}
+
+function getOutputFilename() {
+    return `${OUTPUT_FILENAME_PREFIX}${generateRandomNumberString()}.mp4`;
 }
 
 function captureVideoFrame(file) {
