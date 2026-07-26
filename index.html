@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TheZiess Method — NoBlur</title>
+  <meta name="description" content="NoBlur video quality preservation tool redesigned for TheZiess Method.">
+  <link href="https://fonts.googleapis.com/css2?family=TikTok+Sans:wght@300..900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="logo.png">
+  <link rel="stylesheet" href="style.css">
+  <script>if (!window.crossOriginIsolated) window.SharedArrayBuffer = undefined;</script>
+  <script src="./coi-serviceworker.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.6.0/fonts/remixicon.css">
+  <script type="importmap">{"imports":{"@ffmpeg/util":"https://esm.sh/@ffmpeg/util@0.12.2","@ffmpeg/ffmpeg":"https://esm.sh/@ffmpeg/ffmpeg@0.12.15"}}</script>
+</head>
+<body>
+  <div class="page">
+    <div class="panel panel-header">
+      <div class="header">
+        <div class="brand-wrap">
+          <img class="brand-logo" src="logo.png" alt="TheZiess Method logo">
+          <div class="brand-copy">
+            <div class="header-title">TheZiess <span>Method</span></div>
+            <div class="header-subtitle">NoBlur video quality engine · Patch, interpolate and prepare videos for TikTok Studio.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="panel panel-left">
+        <div class="control-box">
+          <div class="interpolator-box">
+            <div class="interpolator-header"><span class="interpolator-title">VIDEO SETTING</span></div>
+            <div class="interpolator-options">
+              <label class="checkbox-container">
+                <input type="checkbox" id="enableInterpolation"><span class="checkmark"></span>
+                <span class="label-text">Enable 60fps Interpolation</span>
+              </label>
+              <div class="interpolator-description">Creates intermediate frames for smoother 60fps output using the local FFmpeg VFI engine.</div>
+            </div>
+            <div class="interpolator-resolution" id="vfiResolutionBox" style="display:none">
+              <div class="stat-item"><span class="stat-label">OUTPUT RESOLUTION</span>
+                <select class="stat-select" id="outputResolution"><option value="1080" selected>1080p</option><option value="1440">2K (1440p)</option></select>
+              </div>
+            </div>
+            <div class="interpolator-info"><div class="interpolator-note"><i class="ri-cpu-fill"></i><span>Processing speed depends on your hardware. Multi-core CPU recommended.</span></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel panel-right">
+        <div class="drop-zone" id="dropZone">
+          <div class="brutalist-upload-box"><i class="ri-upload-cloud-2-line"></i></div>
+          <div class="drop-text"><div class="drop-text-primary">DROP VIDEOS HERE</div><div class="drop-text-secondary">OR <span>SELECT FILES</span> · MP4 / MOV</div></div>
+        </div>
+        <div class="queue-and-actions-wrapper">
+          <div class="queue-container"><div class="queue-header"><span class="queue-title">PROCESSING QUEUE</span></div><div class="file-list" id="fileList"></div></div>
+          <div class="control-actions">
+            <div class="btn-row"><button class="btn btn-clear" id="clearBtn">Clear</button><button class="btn btn-patch" id="patchBtn" disabled><span>Patch Videos</span></button></div>
+            <a class="btn btn-tiktok" id="tiktokStudioBtn" href="https://www.tiktok.com/tiktokstudio/upload" target="_blank" rel="noopener noreferrer">Upload to TikTok Studio</a>
+            <div class="upload-note"><i class="ri-information-fill"></i><span>Upload the patched video through TikTok Studio web for best quality preservation.</span></div>
+            <div class="progress-track" id="progressTrack"><div class="progress-bar" id="progressBar"></div></div>
+          </div>
+        </div>
+        <div class="history-container">
+          <div class="history-header" id="historyHeader"><div class="history-header-left"><span class="history-title">HISTORY</span><span class="history-badge" id="historyBadge">0</span></div><button class="history-toggle-btn" id="historyToggleBtn"><i class="ri-arrow-down-s-fill"></i></button></div>
+          <div class="history-drawer" id="historyDrawer"><div class="history-list" id="historyList"></div><div class="history-actions"><button class="btn-clear-history" id="clearHistoryBtn">Clear History</button></div></div>
+        </div>
+        <input type="file" id="fileInput" accept="video/mp4,video/quicktime,.mp4,.mov" multiple>
+      </div>
+
+      <div class="panel panel-log">
+        <div class="log-header"><span class="log-title">SYSTEM STATUS LOG</span><span class="log-copy-toast" id="copyLogToast">Copied</span><button class="log-copy-btn" id="copyLogBtn" title="Copy log"><i class="ri-clipboard-fill"></i></button></div>
+        <div class="status-log" id="statusLog"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">TheZiess Method · NoBlur Processing Suite <span id="changelogContainer"></span></div>
+
+  <div class="modal-overlay" id="vfiModal"><div class="modal-card"><div class="modal-header"><div class="modal-header-left"><i class="ri-flashlight-fill"></i><span class="modal-title">60FPS INTERPOLATION</span></div><button class="modal-close-btn" id="closeVfiModalBtn"><i class="ri-close-fill"></i></button></div><div class="modal-body"><div class="modal-warning-block"><i class="ri-alert-fill"></i><span>Performance Warning</span></div><ul class="modal-warning-list"><li>Processing speed depends on your local hardware.</li><li>Low-end CPUs may take several minutes.</li><li>Multi-core CPUs are recommended.</li><li>Choose output resolution before processing.</li></ul><div class="modal-footer-note">Processing time may vary depending on the video and device.</div></div><div class="modal-actions"><button class="modal-btn modal-btn-cancel" id="cancelVfiBtn">Cancel</button><button class="modal-btn modal-btn-confirm" id="confirmVfiBtn">Enable Anyway</button></div></div></div>
+
+  <div class="modal-overlay" id="tiktokModal"><div class="modal-card"><div class="modal-header"><div class="modal-header-left"><i class="ri-upload-2-fill"></i><span class="modal-title">UPLOAD TO TIKTOK STUDIO</span></div><button class="modal-close-btn" id="closeTiktokModalBtn"><i class="ri-close-fill"></i></button></div><div class="modal-body"><div class="modal-warning-block"><i class="ri-information-fill"></i><span>Enable Desktop Mode First</span></div><ul class="modal-warning-list"><li>TikTok Studio upload works best in desktop mode.</li><li>Chrome: menu → Desktop site.</li><li>Safari: AA → Request Desktop Website.</li><li>Samsung Browser: menu → Desktop view.</li></ul></div><div class="modal-actions"><button class="modal-btn modal-btn-cancel" id="cancelTiktokModalBtn">Cancel</button><a class="modal-btn modal-btn-confirm" id="confirmTiktokBtn" href="https://www.tiktok.com/tiktokstudio/upload" target="_blank" rel="noopener noreferrer">Open TikTok Studio</a></div></div></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
