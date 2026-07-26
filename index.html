@@ -29,8 +29,8 @@
 
     <div class="container">
       <!-- Hidden compatibility controls: keeps existing app.js working while removing the visible 60fps settings card. -->
-      <div class="vfi-compatibility-controls" aria-hidden="true">
-        <input type="checkbox" id="enableInterpolation" tabindex="-1">
+      <div class="vfi-compatibility-controls" aria-hidden="true" hidden style="display:none !important; visibility:hidden !important; position:absolute !important; width:0 !important; height:0 !important; overflow:hidden !important; pointer-events:none !important;">
+        <input type="checkbox" id="enableInterpolation" tabindex="-1" hidden style="display:none !important;">
         <div id="vfiResolutionBox" style="display:none">
           <select id="outputResolution" tabindex="-1">
             <option value="1080" selected>1080p</option>
