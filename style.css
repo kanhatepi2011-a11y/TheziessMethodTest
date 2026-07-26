@@ -1919,3 +1919,79 @@ body::before {
 .telegram-widget-real { min-height: 52px; display:flex; align-items:center; justify-content:center; padding:14px; border:1px solid rgba(168,85,247,.22); border-radius:14px; background:rgba(10,6,20,.5); }
 .telegram-domain-note { margin:12px 0 0; text-align:center; color:#8f839d; font-size:11px; }
 .telegram-domain-note strong { color:#c4b5fd; }
+
+
+/* =========================================================
+   TELEGRAM OIDC LOGIN — FIXED BUTTON STYLES
+   ========================================================= */
+.telegram-login-actions {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 0 4px;
+}
+
+.telegram-login-btn {
+  width: 100%;
+  min-height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 13px 18px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 14px;
+  background: linear-gradient(135deg, #229ED9 0%, #168acd 45%, #7c3aed 100%);
+  color: #ffffff;
+  font-family: "JetBrains Mono", "Noto Sans Khmer", system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  cursor: pointer;
+  box-shadow: 0 14px 34px rgba(34,158,217,.22);
+  transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease;
+}
+
+.telegram-login-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 42px rgba(34,158,217,.30), 0 0 28px rgba(124,58,237,.18);
+}
+
+.telegram-login-btn:active:not(:disabled) {
+  transform: translateY(0) scale(.99);
+}
+
+.telegram-login-btn:disabled {
+  opacity: .65;
+  cursor: wait;
+}
+
+.telegram-login-btn i {
+  font-size: 20px;
+}
+
+.telegram-login-error {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(244,63,94,.24);
+  border-radius: 10px;
+  background: rgba(244,63,94,.08);
+  color: #fda4af;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.auth-modal-card {
+  width: min(520px, 92vw);
+}
+
+.auth-modal-card .modal-body {
+  background: linear-gradient(180deg, rgba(17,8,31,.96), rgba(10,5,19,.98));
+}
+
+@media (max-width: 700px) {
+  .telegram-login-btn {
+    min-height: 50px;
+    font-size: 12px;
+  }
+}
