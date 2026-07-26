@@ -29,8 +29,7 @@ const MOBILE_SCROLL_DELAY_MS = 150;
 const DOWNLOAD_ANCHOR_CLEANUP_MS = 100;
 const SAFE_THUMBNAIL_PREFIX = "data:image/jpeg;base64,";
 
-const TELEGRAM_BOT_USERNAME = "theziess_method_bot";
-const TELEGRAM_AUTH_URL = "https://theziess-method-chi.vercel.app/api/auth/telegram";
+
 const supportedMimeTypes = [
     "video/mp4",
     "video/quicktime",
@@ -69,8 +68,18 @@ const PLANS = {
 };
 
 function hasActiveSubscription() {
-    if (!currentUser || !currentSubscription) return false;
-    if (currentSubscription.planId === "max") return true;
+    if (!currentUser || !currentSubscription) {
+        return false;
+    }
+
+    if (currentSubscription.status !== "active") {
+        return false;
+    }
+
+    if (currentSubscription.planId === "max") {
+        return true;
+    }
+
     return Number(currentSubscription.expiresAt) > Date.now();
 }
 
@@ -127,22 +136,9 @@ async function loadServerSession() {
     updateAccessUI();
 }
 
-function setupTelegramWidget() {
-    const container = document.getElementById("telegramWidgetContainer");
-    if (!container) return;
-    const script = document.createElement("script");
-    script.async = true;
-    script.src = "https://telegram.org/js/telegram-widget.js?22";
-    script.dataset.telegramLogin = TELEGRAM_BOT_USERNAME;
-    script.dataset.size = "large";
-    script.dataset.userpic = "true";
-    script.dataset.requestAccess = "write";
-    script.dataset.authUrl = TELEGRAM_AUTH_URL;
-    container.replaceChildren(script);
-}
 
 async function initializeMembership() {
-    setupTelegramWidget();
+    
     await loadServerSession();
     const params = new URLSearchParams(location.search);
     if (params.get("telegram_login") === "success") {
@@ -153,7 +149,7 @@ async function initializeMembership() {
     document.getElementById("telegramLoginBtn")?.addEventListener("click", () => openModal("telegramModal"));
     document.getElementById("openPlansBtn")?.addEventListener("click", () => document.getElementById("subscriptionPanel")?.scrollIntoView({ behavior: "smooth" }));
     document.getElementById("logoutBtn")?.addEventListener("click", async () => {
-        await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
+        await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
         currentUser = null;
         currentSubscription = null;
         updateAccessUI();

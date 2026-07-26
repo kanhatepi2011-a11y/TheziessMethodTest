@@ -1,164 +1,305 @@
-import { createRemoteJWKSet, jwtVerify } from "jose";
-import { upsertTelegramUser } from "../../_db.js";
-import { setSessionCookie } from "../../_session.js";
+import {
+  createRemoteJWKSet,
+  jwtVerify,
+} from "jose";
 
-function parseCookies(header = "") {
-  const result = {};
+import {
+  upsertTelegramUser,
+} from "../../_db.js";
 
-  for (const part of header.split(";")) {
-    const item = part.trim();
-    if (!item) continue;
+import {
+  appendCookies,
+  createClearCookie,
+  createSessionCookie,
+  parseCookies,
+} from "../../_session.js";
 
-    const separator = item.indexOf("=");
-    if (separator === -1) continue;
-
-    const key = decodeURIComponent(item.slice(0, separator));
-    const value = decodeURIComponent(item.slice(separator + 1));
-    result[key] = value;
-  }
-
-  return result;
-}
-
-function clearOAuthCookies(res) {
-  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
-
-  res.setHeader("Set-Cookie", [
-    `telegram_oauth_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`,
-    `telegram_pkce_verifier=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`,
-  ]);
+function firstQueryValue(value) {
+  return Array.isArray(value)
+    ? value[0]
+    : value;
 }
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).json({
+      error: "Method not allowed",
+    });
   }
 
+  res.setHeader("Cache-Control", "no-store");
+
   try {
-    const code = Array.isArray(req.query.code)
-      ? req.query.code[0]
-      : req.query.code;
+    const code = firstQueryValue(
+      req.query.code,
+    );
 
-    const returnedState = Array.isArray(req.query.state)
-      ? req.query.state[0]
-      : req.query.state;
+    const returnedState = firstQueryValue(
+      req.query.state,
+    );
 
-    const oauthError = Array.isArray(req.query.error)
-      ? req.query.error[0]
-      : req.query.error;
+    const oauthError = firstQueryValue(
+      req.query.error,
+    );
+
+    const oauthDescription = firstQueryValue(
+      req.query.error_description,
+    );
 
     if (oauthError) {
-      return res
-        .status(400)
-        .send(`Telegram authorization failed: ${oauthError}`);
+      return res.status(400).send(
+        `Telegram authorization failed: ${
+          oauthDescription || oauthError
+        }`,
+      );
     }
 
     if (!code || !returnedState) {
-      return res.status(400).send("Missing Telegram code or state.");
+      return res.status(400).send(
+        "Missing Telegram authorization code or state.",
+      );
     }
 
-    const cookies = parseCookies(req.headers.cookie || "");
-    const savedState = cookies.telegram_oauth_state;
-    const verifier = cookies.telegram_pkce_verifier;
+    const cookies = parseCookies(
+      req.headers.cookie || "",
+    );
 
-    if (!savedState || returnedState !== savedState) {
-      return res.status(400).send("Invalid Telegram OAuth state.");
+    const savedState =
+      cookies.telegram_oauth_state;
+
+    const verifier =
+      cookies.telegram_pkce_verifier;
+
+    if (
+      !savedState ||
+      returnedState !== savedState
+    ) {
+      return res.status(400).send(
+        "Invalid Telegram OAuth state. Please restart login.",
+      );
     }
 
     if (!verifier) {
-      return res.status(400).send("Missing Telegram PKCE verifier.");
+      return res.status(400).send(
+        "Missing Telegram PKCE verifier. Please restart login.",
+      );
     }
 
-    const clientId = process.env.TELEGRAM_CLIENT_ID;
-    const clientSecret = process.env.TELEGRAM_CLIENT_SECRET;
-    const redirectUri = process.env.TELEGRAM_REDIRECT_URI;
+    const clientId =
+      process.env.TELEGRAM_CLIENT_ID;
 
-    if (!clientId || !clientSecret || !redirectUri) {
-      return res.status(500).send("Telegram OIDC configuration is incomplete.");
+    const clientSecret =
+      process.env.TELEGRAM_CLIENT_SECRET;
+
+    const redirectUri =
+      process.env.TELEGRAM_REDIRECT_URI;
+
+    if (
+      !clientId ||
+      !clientSecret ||
+      !redirectUri
+    ) {
+      return res.status(500).send(
+        "Telegram OIDC configuration is incomplete.",
+      );
     }
 
-    const basicAuthorization = Buffer.from(
-      `${clientId}:${clientSecret}`,
-    ).toString("base64");
+    const basicAuthorization =
+      Buffer.from(
+        `${clientId}:${clientSecret}`,
+      ).toString("base64");
 
-    const tokenResponse = await fetch("https://oauth.telegram.org/token", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Authorization: `Basic ${basicAuthorization}`,
+    const tokenResponse = await fetch(
+      "https://oauth.telegram.org/token",
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type":
+            "application/x-www-form-urlencoded",
+
+          Authorization:
+            `Basic ${basicAuthorization}`,
+        },
+
+        body: new URLSearchParams({
+          grant_type:
+            "authorization_code",
+
+          code,
+
+          redirect_uri:
+            redirectUri,
+
+          client_id:
+            clientId,
+
+          code_verifier:
+            verifier,
+        }),
       },
-      body: new URLSearchParams({
-        grant_type: "authorization_code",
-        code,
-        redirect_uri: redirectUri,
-        client_id: clientId,
-        code_verifier: verifier,
-      }),
-    });
+    );
 
-    const tokenData = await tokenResponse.json();
+    const tokenData =
+      await tokenResponse.json();
 
-    if (!tokenResponse.ok || !tokenData.id_token) {
-      console.error("Telegram token response:", tokenData);
+    if (
+      !tokenResponse.ok ||
+      !tokenData.id_token
+    ) {
+      console.error(
+        "Telegram token response:",
+        tokenData,
+      );
 
       return res.status(400).json({
-        error: "Telegram token exchange failed",
-        details: tokenData,
+        error:
+          "Telegram token exchange failed.",
+
+        details:
+          tokenData,
       });
     }
 
-    const jwks = createRemoteJWKSet(
-      new URL("https://oauth.telegram.org/.well-known/jwks.json"),
-    );
+    const telegramJwks =
+      createRemoteJWKSet(
+        new URL(
+          "https://oauth.telegram.org/.well-known/jwks.json",
+        ),
+      );
 
-    const { payload } = await jwtVerify(tokenData.id_token, jwks, {
-      issuer: "https://oauth.telegram.org",
-      audience: String(clientId),
-    });
+    const verification =
+      await jwtVerify(
+        tokenData.id_token,
+        telegramJwks,
+        {
+          issuer:
+            "https://oauth.telegram.org",
 
-    const telegramId = payload.id || payload.sub;
+          audience:
+            String(clientId),
+        },
+      );
+
+    const payload =
+      verification.payload;
+
+    const telegramId =
+      payload.sub ||
+      payload.id;
 
     if (!telegramId) {
-      return res.status(400).send("Telegram user ID is missing.");
+      return res.status(400).send(
+        "Telegram user ID is missing.",
+      );
     }
 
-    const fullName = typeof payload.name === "string" ? payload.name : "";
-    const nameParts = fullName.trim().split(/\s+/);
+    const fullName =
+      typeof payload.name === "string"
+        ? payload.name.trim()
+        : "";
+
+    const nameParts =
+      fullName
+        ? fullName.split(/\s+/)
+        : [];
 
     const telegramUser = {
-      id: String(telegramId),
+      id:
+        String(telegramId),
+
       username:
-        typeof payload.preferred_username === "string"
+        typeof payload.preferred_username ===
+        "string"
           ? payload.preferred_username
           : "",
+
       first_name:
-        typeof payload.given_name === "string"
+        typeof payload.given_name ===
+        "string"
           ? payload.given_name
-          : nameParts[0] || "Telegram user",
+          : nameParts[0] ||
+            "Telegram User",
+
       last_name:
-        typeof payload.family_name === "string"
+        typeof payload.family_name ===
+        "string"
           ? payload.family_name
           : nameParts.slice(1).join(" "),
+
       photo_url:
-        typeof payload.picture === "string" ? payload.picture : "",
+        typeof payload.picture ===
+        "string"
+          ? payload.picture
+          : "",
     };
 
-    const dbUser = await upsertTelegramUser(telegramUser);
+    const databaseUser =
+      await upsertTelegramUser(
+        telegramUser,
+      );
 
-    setSessionCookie(res, {
-      userId: String(dbUser.id),
-      telegramId: String(dbUser.telegram_id),
-      issuedAt: Date.now(),
-    });
+    const session = {
+      userId:
+        String(databaseUser.id),
 
-    clearOAuthCookies(res);
+      telegramId:
+        String(databaseUser.telegram_id),
 
-    return res.redirect(302, "/?telegram_login=success");
+      user: {
+        id:
+          String(
+            databaseUser.telegram_id,
+          ),
+
+        databaseId:
+          String(databaseUser.id),
+
+        first_name:
+          databaseUser.first_name ||
+          "",
+
+        last_name:
+          databaseUser.last_name ||
+          "",
+
+        username:
+          databaseUser.username ||
+          "",
+
+        photo_url:
+          databaseUser.photo_url ||
+          "",
+      },
+
+      issuedAt:
+        Date.now(),
+    };
+
+    appendCookies(res, [
+      createSessionCookie(session),
+
+      createClearCookie(
+        "telegram_oauth_state",
+      ),
+
+      createClearCookie(
+        "telegram_pkce_verifier",
+      ),
+    ]);
+
+    return res.redirect(
+      302,
+      "/?telegram_login=success",
+    );
   } catch (error) {
-    console.error("Telegram OIDC callback error:", error);
+    console.error(
+      "Telegram OIDC callback error:",
+      error,
+    );
 
     return res.status(500).send(
-      "Telegram login failed. Check Client ID, Client Secret, redirect URI and database connection.",
+      "Telegram login failed. Check Telegram configuration, SESSION_SECRET and DATABASE_URL.",
     );
   }
 }
