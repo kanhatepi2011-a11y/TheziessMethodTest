@@ -95,3 +95,33 @@ GitHub Pages serves files from the repo root directly (no Jekyll processing due 
 This utility rewrites MP4 container metadata using sample-table inflation to bypass platform recompression. No video or audio data is re-encoded in the main pipeline, preserving original quality. The interpolation path (optional) uses FFmpeg.wasm for frame rate conversion only. Designed to work with valid MP4 and MOV containers. Always keep backups of your original video files before processing.
 
 See [CHANGELOG.md](./CHANGELOG.md) for the full release history.
+
+## Real Telegram Login setup
+
+This build uses Telegram Login Widget with bot `@theziess_method_bot` and callback:
+
+`https://theziess-method-chi.vercel.app/api/auth/telegram`
+
+1. Open `@BotFather` in Telegram.
+2. Send `/setdomain`, choose `@theziess_method_bot`, and enter:
+   `theziess-method-chi.vercel.app`
+3. In Vercel → Project Settings → Environment Variables, add:
+   - `TELEGRAM_BOT_TOKEN` — your private bot token (never expose it in frontend code)
+   - `SESSION_SECRET` — a long random value, at least 24 characters
+4. Redeploy the project.
+
+Telegram identity and demo subscription are stored in an HTTP-only signed cookie. The KHQR flow remains demo-only.
+
+## PostgreSQL database setup
+
+This version permanently stores Telegram users, subscriptions, and KHQR demo payments in PostgreSQL.
+
+1. Create a PostgreSQL database. Neon or Supabase works well with Vercel.
+2. Add the PostgreSQL connection string as `DATABASE_URL` in Vercel → Project Settings → Environment Variables.
+3. Keep `TELEGRAM_BOT_TOKEN` and `SESSION_SECRET` configured.
+4. Redeploy the project.
+5. Open `/api/db-status` to confirm the database connection.
+
+The API automatically creates the `users`, `subscriptions`, and `payments` tables on first use. You can also run `database.sql` manually in your PostgreSQL SQL editor.
+
+Never expose `DATABASE_URL`, the Telegram bot token, or the session secret in frontend code.

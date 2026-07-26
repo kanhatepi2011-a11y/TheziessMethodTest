@@ -29,8 +29,8 @@ const MOBILE_SCROLL_DELAY_MS = 150;
 const DOWNLOAD_ANCHOR_CLEANUP_MS = 100;
 const SAFE_THUMBNAIL_PREFIX = "data:image/jpeg;base64,";
 
-const OUTPUT_FILENAME_PREFIX = "@theziess.method_";
-const OUTPUT_RANDOM_DIGITS = 8;
+const TELEGRAM_BOT_USERNAME = "theziess_method_bot";
+const TELEGRAM_AUTH_URL = "https://theziess-method-chi.vercel.app/api/auth/telegram";
 const supportedMimeTypes = [
     "video/mp4",
     "video/quicktime",
@@ -58,6 +58,142 @@ let processingFiles = false;
 let lastPatchedVfi = false;
 let lastPatchedRes = "1080";
 
+let currentUser = null;
+let currentSubscription = null;
+let pendingPlan = null;
+
+const PLANS = {
+    pro: { id: "pro", name: "PRO", price: "$2", durationLabel: "30 days", days: 30 },
+    premium: { id: "premium", name: "PREMIUM", price: "$5", durationLabel: "120 days", days: 120 },
+    max: { id: "max", name: "MAX", price: "$10", durationLabel: "Unlimited", days: null },
+};
+
+function hasActiveSubscription() {
+    if (!currentUser || !currentSubscription) return false;
+    if (currentSubscription.planId === "max") return true;
+    return Number(currentSubscription.expiresAt) > Date.now();
+}
+
+function formatSubscriptionExpiry(subscription) {
+    if (!subscription) return "No active plan";
+    if (subscription.planId === "max") return "MAX · Unlimited";
+    return `${PLANS[subscription.planId]?.name || "PLAN"} · until ${new Date(subscription.expiresAt).toLocaleDateString()}`;
+}
+
+function openModal(id) { document.getElementById(id)?.classList.add("active"); }
+function closeModal(id) { document.getElementById(id)?.classList.remove("active"); }
+
+function updateAccessUI() {
+    const loggedIn = !!currentUser;
+    const active = hasActiveSubscription();
+    const accountLabel = document.getElementById("accountLabel");
+    const loginBtn = document.getElementById("telegramLoginBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const subscriptionStatus = document.getElementById("subscriptionStatus");
+    const lock = document.getElementById("accessLock");
+    if (accountLabel) accountLabel.textContent = loggedIn ? `@${currentUser.username || currentUser.first_name || "telegram_user"}` : "មិនទាន់ចូលគណនី";
+    if (loginBtn) loginBtn.hidden = loggedIn;
+    if (logoutBtn) logoutBtn.hidden = !loggedIn;
+    if (subscriptionStatus) {
+        subscriptionStatus.textContent = active ? formatSubscriptionExpiry(currentSubscription) : "No active plan";
+        subscriptionStatus.classList.toggle("active", active);
+    }
+    document.querySelectorAll(".plan-card").forEach((card) => card.classList.toggle("current", active && card.dataset.plan === currentSubscription?.planId));
+    document.body.classList.toggle("access-granted", active);
+    if (lock) lock.hidden = active;
+    updatePatchButton();
+}
+
+function requireSubscription() {
+    if (hasActiveSubscription()) return true;
+    if (!currentUser) openModal("telegramModal");
+    else document.getElementById("subscriptionPanel")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    updateAccessUI();
+    return false;
+}
+
+async function loadServerSession() {
+    try {
+        const response = await fetch("/api/auth/me", { credentials: "same-origin", cache: "no-store" });
+        if (!response.ok) throw new Error("Unable to read login session");
+        const data = await response.json();
+        currentUser = data.authenticated ? data.user : null;
+        currentSubscription = data.subscription || null;
+    } catch (error) {
+        currentUser = null;
+        currentSubscription = null;
+        console.error(error);
+    }
+    updateAccessUI();
+}
+
+function setupTelegramWidget() {
+    const container = document.getElementById("telegramWidgetContainer");
+    if (!container) return;
+    const script = document.createElement("script");
+    script.async = true;
+    script.src = "https://telegram.org/js/telegram-widget.js?22";
+    script.dataset.telegramLogin = TELEGRAM_BOT_USERNAME;
+    script.dataset.size = "large";
+    script.dataset.userpic = "true";
+    script.dataset.requestAccess = "write";
+    script.dataset.authUrl = TELEGRAM_AUTH_URL;
+    container.replaceChildren(script);
+}
+
+async function initializeMembership() {
+    setupTelegramWidget();
+    await loadServerSession();
+    const params = new URLSearchParams(location.search);
+    if (params.get("telegram_login") === "success") {
+        params.delete("telegram_login");
+        history.replaceState({}, "", `${location.pathname}${params.toString() ? `?${params}` : ""}${location.hash}`);
+        logMessage("Telegram account verified successfully.", "success");
+    }
+    document.getElementById("telegramLoginBtn")?.addEventListener("click", () => openModal("telegramModal"));
+    document.getElementById("openPlansBtn")?.addEventListener("click", () => document.getElementById("subscriptionPanel")?.scrollIntoView({ behavior: "smooth" }));
+    document.getElementById("logoutBtn")?.addEventListener("click", async () => {
+        await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
+        currentUser = null;
+        currentSubscription = null;
+        updateAccessUI();
+    });
+    document.querySelectorAll("[data-close-modal]").forEach((button) => button.addEventListener("click", () => closeModal(button.dataset.closeModal)));
+    document.querySelectorAll(".plan-card").forEach((card) => card.addEventListener("click", () => {
+        if (!currentUser) { openModal("telegramModal"); return; }
+        pendingPlan = PLANS[card.dataset.plan];
+        document.getElementById("paymentAmount").textContent = pendingPlan.price;
+        document.getElementById("paymentPlanName").textContent = pendingPlan.name;
+        document.getElementById("paymentDuration").textContent = pendingPlan.durationLabel;
+        openModal("paymentModal");
+    }));
+    document.getElementById("confirmPaymentBtn")?.addEventListener("click", async () => {
+        if (!pendingPlan || !currentUser) return;
+        const button = document.getElementById("confirmPaymentBtn");
+        button.disabled = true;
+        try {
+            const response = await fetch("/api/subscription/activate-demo", {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ planId: pendingPlan.id }),
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || "Demo activation failed");
+            currentSubscription = data.subscription;
+            closeModal("paymentModal");
+            logMessage(`${pendingPlan.name} subscription activated (KHQR demo).`, "success");
+            updateAccessUI();
+        } catch (error) {
+            logMessage(error.message, "error");
+        } finally {
+            button.disabled = false;
+        }
+    });
+    document.getElementById("lockActionBtn")?.addEventListener("click", () => currentUser ? document.getElementById("subscriptionPanel")?.scrollIntoView({ behavior: "smooth" }) : openModal("telegramModal"));
+    updateAccessUI();
+}
+
 let lastWidth = null;
 function adjustMobileLayout() {
     const currentWidth = window.innerWidth;
@@ -82,6 +218,7 @@ function adjustMobileLayout() {
 }
 
 function initializeApp() {
+    initializeMembership();
     renderHistoryList();
     adjustMobileLayout();
     window.addEventListener("resize", adjustMobileLayout);
@@ -175,22 +312,12 @@ function isMovFile(file) {
     return false;
 }
 
-function generateRandomNumberString(length = OUTPUT_RANDOM_DIGITS) {
-    const digits = new Uint8Array(length);
-
-    if (globalThis.crypto?.getRandomValues) {
-        globalThis.crypto.getRandomValues(digits);
-    } else {
-        for (let index = 0; index < length; index += 1) {
-            digits[index] = Math.floor(Math.random() * 256);
-        }
-    }
-
-    return Array.from(digits, (value) => String(value % 10)).join("");
-}
-
 function getOutputFilename() {
-    return `${OUTPUT_FILENAME_PREFIX}${generateRandomNumberString()}.mp4`;
+    const randomNumber = crypto.getRandomValues(new Uint32Array(1))[0]
+        .toString()
+        .padStart(10, "0")
+        .slice(0, 10);
+    return `@theziess.method_${randomNumber}.mp4`;
 }
 
 function captureVideoFrame(file) {
@@ -398,6 +525,7 @@ function renderFileList() {
 }
 
 async function addFiles(fileList) {
+    if (!requireSubscription()) return;
     if (processingFiles || currentFlowState === "patching") return;
     processingFiles = true;
     try {
@@ -464,6 +592,12 @@ function removeFile(index) {
 }
 
 function updatePatchButton() {
+    if (!hasActiveSubscription()) {
+        patchBtn.disabled = true;
+        const label = patchBtn.querySelector("span");
+        if (label) label.textContent = "Subscription Required";
+        return;
+    }
     const failedCount = selectedFiles.filter(
         (f) => f.status === "error",
     ).length;
@@ -1121,6 +1255,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 patchBtn.addEventListener("click", async () => {
+    if (!requireSubscription()) return;
     const failedItems = selectedFiles.filter((f) => f.status === "error");
     if (failedItems.length > 0) {
         for (const item of failedItems) {

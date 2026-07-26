@@ -39,6 +39,28 @@
         </div>
       </div>
 
+      <div class="panel subscription-panel" id="subscriptionPanel">
+        <div class="subscription-heading">
+          <div>
+            <div class="subscription-eyebrow">SUBSCRIPTION REQUIRED</div>
+            <h2>ជ្រើសរើសគម្រោង</h2>
+            <p>ត្រូវ Login និងមាន Subscription សកម្ម មុនអាច Compress វីដេអូបាន។ KHQR ខាងក្រោមគឺ Demo ប៉ុណ្ណោះ។</p>
+          </div>
+          <span class="subscription-status" id="subscriptionStatus">No active plan</span>
+        </div>
+        <div class="plan-grid">
+          <button class="plan-card" data-plan="pro">
+            <span class="plan-name">PRO</span><strong>$2</strong><small>30 days</small>
+          </button>
+          <button class="plan-card plan-featured" data-plan="premium">
+            <span class="plan-chip">POPULAR</span><span class="plan-name">PREMIUM</span><strong>$5</strong><small>120 days</small>
+          </button>
+          <button class="plan-card" data-plan="max">
+            <span class="plan-name">MAX</span><strong>$10</strong><small>Unlimited</small>
+          </button>
+        </div>
+      </div>
+
       <div class="panel panel-right">
         <div class="drop-zone" id="dropZone">
           <div class="brutalist-upload-box"><i class="ri-upload-cloud-2-line"></i></div>
@@ -72,6 +94,39 @@
   <div class="modal-overlay" id="vfiModal"><div class="modal-card"><div class="modal-header"><div class="modal-header-left"><i class="ri-flashlight-fill"></i><span class="modal-title">ការបង្កើនទៅ 60FPS</span></div><button class="modal-close-btn" id="closeVfiModalBtn"><i class="ri-close-fill"></i></button></div><div class="modal-body"><div class="modal-warning-block"><i class="ri-alert-fill"></i><span>ការជូនដំណឹងអំពីសមត្ថភាព</span></div><ul class="modal-warning-list"><li>ល្បឿនដំណើរការអាស្រ័យលើសមត្ថភាពឧបករណ៍របស់អ្នក។</li><li>CPU ដែលមានសមត្ថភាពទាប អាចចំណាយពេលច្រើននាទី។</li><li>សូមប្រើ CPU ដែលមានច្រើន Core ដើម្បីបានល្បឿនល្អ។</li><li>សូមជ្រើសរើសគុណភាពវីដេអូចេញ មុនចាប់ផ្តើមដំណើរការ។</li></ul><div class="modal-footer-note">រយៈពេលដំណើរការអាចខុសគ្នា អាស្រ័យលើទំហំវីដេអូ និងសមត្ថភាពឧបករណ៍។</div></div><div class="modal-actions"><button class="modal-btn modal-btn-cancel" id="cancelVfiBtn">បោះបង់</button><button class="modal-btn modal-btn-confirm" id="confirmVfiBtn">យល់ព្រមបើក</button></div></div></div>
 
   <div class="modal-overlay" id="tiktokModal"><div class="modal-card"><div class="modal-header"><div class="modal-header-left"><i class="ri-upload-2-fill"></i><span class="modal-title">បើក TIKTOK STUDIO</span></div><button class="modal-close-btn" id="closeTiktokModalBtn"><i class="ri-close-fill"></i></button></div><div class="modal-body"><div class="modal-warning-block"><i class="ri-information-fill"></i><span>សូមបើក Desktop Mode ជាមុន</span></div><ul class="modal-warning-list"><li>TikTok Studio ដំណើរការល្អបំផុតនៅក្នុង Desktop Mode។</li><li>Chrome៖ ចុច Menu → Desktop site។</li><li>Safari៖ ចុច AA → Request Desktop Website។</li><li>Samsung Browser៖ ចុច Menu → Desktop view។</li></ul></div><div class="modal-actions"><button class="modal-btn modal-btn-cancel" id="cancelTiktokModalBtn">បោះបង់</button><a class="modal-btn modal-btn-confirm" id="confirmTiktokBtn" href="https://www.tiktok.com/tiktokstudio/upload" target="_blank" rel="noopener noreferrer">បើក TikTok Studio</a></div></div></div>
+
+  <div class="modal-overlay" id="telegramModal">
+    <div class="modal-card auth-modal-card">
+      <div class="modal-header"><div class="modal-header-left"><i class="ri-telegram-2-fill"></i><span class="modal-title">Telegram Login</span></div><button class="modal-close-btn" data-close-modal="telegramModal"><i class="ri-close-fill"></i></button></div>
+      <div class="modal-body">
+        <p class="modal-copy">ចូលដោយ Telegram account ពិតរបស់អ្នក។ Telegram នឹងស្នើឱ្យអ្នកអនុញ្ញាត ហើយ Server របស់យើងនឹងផ្ទៀងផ្ទាត់ signature មុនបង្កើត session។</p>
+        <div id="telegramWidgetContainer" class="telegram-widget-real"></div>
+        <p class="telegram-domain-note">Authorized domain: <strong>theziess-method-chi.vercel.app</strong></p>
+      </div>
+      <div class="modal-actions"><button class="modal-btn modal-btn-cancel" data-close-modal="telegramModal">Cancel</button></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="paymentModal">
+    <div class="modal-card payment-modal-card">
+      <div class="modal-header"><div class="modal-header-left"><i class="ri-qr-code-line"></i><span class="modal-title">KHQR Demo Payment</span></div><button class="modal-close-btn" data-close-modal="paymentModal"><i class="ri-close-fill"></i></button></div>
+      <div class="modal-body payment-body">
+        <div class="khqr-card">
+          <div class="khqr-top"><strong>KHQR</strong><span>DEMO ONLY</span></div>
+          <div class="fake-qr" aria-label="Demo QR code"><div></div></div>
+          <div class="merchant-name">THEZIESS METHOD</div>
+          <div class="payment-amount" id="paymentAmount">$0</div>
+        </div>
+        <div class="payment-summary"><div><span>Plan</span><strong id="paymentPlanName">—</strong></div><div><span>Duration</span><strong id="paymentDuration">—</strong></div></div>
+        <div class="demo-warning"><i class="ri-information-fill"></i> នេះជា Demo KHQR មិនទទួលប្រាក់ពិតទេ។ ចុច “Confirm Demo Payment” ដើម្បី Activate plan សាកល្បង។</div>
+      </div>
+      <div class="modal-actions"><button class="modal-btn modal-btn-cancel" data-close-modal="paymentModal">Cancel</button><button class="modal-btn modal-btn-confirm" id="confirmPaymentBtn">Confirm Demo Payment</button></div>
+    </div>
+  </div>
+
+  <div class="access-lock" id="accessLock" hidden>
+    <div><i class="ri-lock-2-fill"></i><strong>Subscription required</strong><span>Login with Telegram and activate a plan to compress videos.</span><button id="lockActionBtn">Login / Choose Plan</button></div>
+  </div>
 
   <script type="module" src="app.js"></script>
 </body>
