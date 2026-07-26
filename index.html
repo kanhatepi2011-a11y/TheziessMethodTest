@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="km">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TheZiess Method — NoBlur</title>
-  <meta name="description" content="NoBlur video quality preservation tool redesigned for TheZiess Method.">
-  <link href="https://fonts.googleapis.com/css2?family=TikTok+Sans:wght@300..900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <title>TheZiess Method — NoBlur | កែគុណភាពវីដេអូ</title>
+  <meta name="description" content="NoBlur ជាឧបករណ៍កែច្នៃ និងរក្សាគុណភាពវីដេអូសម្រាប់ TikTok Studio។">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Khmer:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="icon" type="image/png" href="logo.png">
   <link rel="stylesheet" href="style.css">
   <script>if (!window.crossOriginIsolated) window.SharedArrayBuffer = undefined;</script>
@@ -21,67 +21,57 @@
           <img class="brand-logo" src="logo.png" alt="TheZiess Method logo">
           <div class="brand-copy">
             <div class="header-title">TheZiess <span>Method</span></div>
-            <div class="header-subtitle">NoBlur video quality engine · Patch, interpolate and prepare videos for TikTok Studio.</div>
+            <div class="header-subtitle">ម៉ាស៊ីនរក្សាគុណភាពវីដេអូ · កែច្នៃ បង្កើនភាពរលូន និងត្រៀម Upload ទៅ TikTok Studio។</div>
           </div>
         </div>
       </div>
     </div>
 
     <div class="container">
-      <div class="panel panel-left">
-        <div class="control-box">
-          <div class="interpolator-box">
-            <div class="interpolator-header"><span class="interpolator-title">VIDEO SETTING</span></div>
-            <div class="interpolator-options">
-              <label class="checkbox-container">
-                <input type="checkbox" id="enableInterpolation"><span class="checkmark"></span>
-                <span class="label-text">Enable 60fps Interpolation</span>
-              </label>
-              <div class="interpolator-description">Creates intermediate frames for smoother 60fps output using the local FFmpeg VFI engine.</div>
-            </div>
-            <div class="interpolator-resolution" id="vfiResolutionBox" style="display:none">
-              <div class="stat-item"><span class="stat-label">OUTPUT RESOLUTION</span>
-                <select class="stat-select" id="outputResolution"><option value="1080" selected>1080p</option><option value="1440">2K (1440p)</option></select>
-              </div>
-            </div>
-            <div class="interpolator-info"><div class="interpolator-note"><i class="ri-cpu-fill"></i><span>Processing speed depends on your hardware. Multi-core CPU recommended.</span></div></div>
-          </div>
+      <!-- Hidden compatibility controls: keeps existing app.js working while removing the visible 60fps settings card. -->
+      <div class="vfi-compatibility-controls" aria-hidden="true">
+        <input type="checkbox" id="enableInterpolation" tabindex="-1">
+        <div id="vfiResolutionBox" style="display:none">
+          <select id="outputResolution" tabindex="-1">
+            <option value="1080" selected>1080p</option>
+            <option value="1440">2K (1440p)</option>
+          </select>
         </div>
       </div>
 
       <div class="panel panel-right">
         <div class="drop-zone" id="dropZone">
           <div class="brutalist-upload-box"><i class="ri-upload-cloud-2-line"></i></div>
-          <div class="drop-text"><div class="drop-text-primary">DROP VIDEOS HERE</div><div class="drop-text-secondary">OR <span>SELECT FILES</span> · MP4 / MOV</div></div>
+          <div class="drop-text"><div class="drop-text-primary">ទម្លាក់វីដេអូនៅទីនេះ</div><div class="drop-text-secondary">ឬ <span>ជ្រើសរើសឯកសារ</span> · MP4 / MOV</div></div>
         </div>
         <div class="queue-and-actions-wrapper">
-          <div class="queue-container"><div class="queue-header"><span class="queue-title">PROCESSING QUEUE</span></div><div class="file-list" id="fileList"></div></div>
+          <div class="queue-container"><div class="queue-header"><span class="queue-title">បញ្ជីរង់ចាំដំណើរការ</span></div><div class="file-list" id="fileList"></div></div>
           <div class="control-actions">
-            <div class="btn-row"><button class="btn btn-clear" id="clearBtn">Clear</button><button class="btn btn-patch" id="patchBtn" disabled><span>Patch Videos</span></button></div>
-            <a class="btn btn-tiktok" id="tiktokStudioBtn" href="https://www.tiktok.com/tiktokstudio/upload" target="_blank" rel="noopener noreferrer">Upload to TikTok Studio</a>
-            <div class="upload-note"><i class="ri-information-fill"></i><span>Upload the patched video through TikTok Studio web for best quality preservation.</span></div>
+            <div class="btn-row"><button class="btn btn-clear" id="clearBtn">សម្អាត</button><button class="btn btn-patch" id="patchBtn" disabled><span>ចាប់ផ្តើមកែវីដេអូ</span></button></div>
+            <a class="btn btn-tiktok" id="tiktokStudioBtn" href="https://www.tiktok.com/tiktokstudio/upload" target="_blank" rel="noopener noreferrer">បើក TikTok Studio</a>
+            <div class="upload-note"><i class="ri-information-fill"></i><span>សូម Upload វីដេអូដែលបានកែរួចតាម TikTok Studio Web ដើម្បីរក្សាគុណភាពឱ្យបានល្អបំផុត។</span></div>
             <div class="progress-track" id="progressTrack"><div class="progress-bar" id="progressBar"></div></div>
           </div>
         </div>
         <div class="history-container">
-          <div class="history-header" id="historyHeader"><div class="history-header-left"><span class="history-title">HISTORY</span><span class="history-badge" id="historyBadge">0</span></div><button class="history-toggle-btn" id="historyToggleBtn"><i class="ri-arrow-down-s-fill"></i></button></div>
-          <div class="history-drawer" id="historyDrawer"><div class="history-list" id="historyList"></div><div class="history-actions"><button class="btn-clear-history" id="clearHistoryBtn">Clear History</button></div></div>
+          <div class="history-header" id="historyHeader"><div class="history-header-left"><span class="history-title">ប្រវត្តិការងារ</span><span class="history-badge" id="historyBadge">0</span></div><button class="history-toggle-btn" id="historyToggleBtn"><i class="ri-arrow-down-s-fill"></i></button></div>
+          <div class="history-drawer" id="historyDrawer"><div class="history-list" id="historyList"></div><div class="history-actions"><button class="btn-clear-history" id="clearHistoryBtn">សម្អាតប្រវត្តិ</button></div></div>
         </div>
         <input type="file" id="fileInput" accept="video/mp4,video/quicktime,.mp4,.mov" multiple>
       </div>
 
       <div class="panel panel-log">
-        <div class="log-header"><span class="log-title">SYSTEM STATUS LOG</span><span class="log-copy-toast" id="copyLogToast">Copied</span><button class="log-copy-btn" id="copyLogBtn" title="Copy log"><i class="ri-clipboard-fill"></i></button></div>
+        <div class="log-header"><span class="log-title">ស្ថានភាពប្រព័ន្ធ</span><span class="log-copy-toast" id="copyLogToast">បានចម្លង</span><button class="log-copy-btn" id="copyLogBtn" title="ចម្លងកំណត់ត្រា"><i class="ri-clipboard-fill"></i></button></div>
         <div class="status-log" id="statusLog"></div>
       </div>
     </div>
   </div>
 
-  <div class="footer">TheZiess Method · NoBlur Processing Suite <span id="changelogContainer"></span></div>
+  <div class="footer">TheZiess Method · ឧបករណ៍កែគុណភាពវីដេអូ NoBlur <span id="changelogContainer"></span></div>
 
-  <div class="modal-overlay" id="vfiModal"><div class="modal-card"><div class="modal-header"><div class="modal-header-left"><i class="ri-flashlight-fill"></i><span class="modal-title">60FPS INTERPOLATION</span></div><button class="modal-close-btn" id="closeVfiModalBtn"><i class="ri-close-fill"></i></button></div><div class="modal-body"><div class="modal-warning-block"><i class="ri-alert-fill"></i><span>Performance Warning</span></div><ul class="modal-warning-list"><li>Processing speed depends on your local hardware.</li><li>Low-end CPUs may take several minutes.</li><li>Multi-core CPUs are recommended.</li><li>Choose output resolution before processing.</li></ul><div class="modal-footer-note">Processing time may vary depending on the video and device.</div></div><div class="modal-actions"><button class="modal-btn modal-btn-cancel" id="cancelVfiBtn">Cancel</button><button class="modal-btn modal-btn-confirm" id="confirmVfiBtn">Enable Anyway</button></div></div></div>
+  <div class="modal-overlay" id="vfiModal"><div class="modal-card"><div class="modal-header"><div class="modal-header-left"><i class="ri-flashlight-fill"></i><span class="modal-title">ការបង្កើនទៅ 60FPS</span></div><button class="modal-close-btn" id="closeVfiModalBtn"><i class="ri-close-fill"></i></button></div><div class="modal-body"><div class="modal-warning-block"><i class="ri-alert-fill"></i><span>ការជូនដំណឹងអំពីសមត្ថភាព</span></div><ul class="modal-warning-list"><li>ល្បឿនដំណើរការអាស្រ័យលើសមត្ថភាពឧបករណ៍របស់អ្នក។</li><li>CPU ដែលមានសមត្ថភាពទាប អាចចំណាយពេលច្រើននាទី។</li><li>សូមប្រើ CPU ដែលមានច្រើន Core ដើម្បីបានល្បឿនល្អ។</li><li>សូមជ្រើសរើសគុណភាពវីដេអូចេញ មុនចាប់ផ្តើមដំណើរការ។</li></ul><div class="modal-footer-note">រយៈពេលដំណើរការអាចខុសគ្នា អាស្រ័យលើទំហំវីដេអូ និងសមត្ថភាពឧបករណ៍។</div></div><div class="modal-actions"><button class="modal-btn modal-btn-cancel" id="cancelVfiBtn">បោះបង់</button><button class="modal-btn modal-btn-confirm" id="confirmVfiBtn">យល់ព្រមបើក</button></div></div></div>
 
-  <div class="modal-overlay" id="tiktokModal"><div class="modal-card"><div class="modal-header"><div class="modal-header-left"><i class="ri-upload-2-fill"></i><span class="modal-title">UPLOAD TO TIKTOK STUDIO</span></div><button class="modal-close-btn" id="closeTiktokModalBtn"><i class="ri-close-fill"></i></button></div><div class="modal-body"><div class="modal-warning-block"><i class="ri-information-fill"></i><span>Enable Desktop Mode First</span></div><ul class="modal-warning-list"><li>TikTok Studio upload works best in desktop mode.</li><li>Chrome: menu → Desktop site.</li><li>Safari: AA → Request Desktop Website.</li><li>Samsung Browser: menu → Desktop view.</li></ul></div><div class="modal-actions"><button class="modal-btn modal-btn-cancel" id="cancelTiktokModalBtn">Cancel</button><a class="modal-btn modal-btn-confirm" id="confirmTiktokBtn" href="https://www.tiktok.com/tiktokstudio/upload" target="_blank" rel="noopener noreferrer">Open TikTok Studio</a></div></div></div>
+  <div class="modal-overlay" id="tiktokModal"><div class="modal-card"><div class="modal-header"><div class="modal-header-left"><i class="ri-upload-2-fill"></i><span class="modal-title">បើក TIKTOK STUDIO</span></div><button class="modal-close-btn" id="closeTiktokModalBtn"><i class="ri-close-fill"></i></button></div><div class="modal-body"><div class="modal-warning-block"><i class="ri-information-fill"></i><span>សូមបើក Desktop Mode ជាមុន</span></div><ul class="modal-warning-list"><li>TikTok Studio ដំណើរការល្អបំផុតនៅក្នុង Desktop Mode។</li><li>Chrome៖ ចុច Menu → Desktop site។</li><li>Safari៖ ចុច AA → Request Desktop Website។</li><li>Samsung Browser៖ ចុច Menu → Desktop view។</li></ul></div><div class="modal-actions"><button class="modal-btn modal-btn-cancel" id="cancelTiktokModalBtn">បោះបង់</button><a class="modal-btn modal-btn-confirm" id="confirmTiktokBtn" href="https://www.tiktok.com/tiktokstudio/upload" target="_blank" rel="noopener noreferrer">បើក TikTok Studio</a></div></div></div>
 
   <script type="module" src="app.js"></script>
 </body>
