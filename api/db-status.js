@@ -21,7 +21,7 @@ export default async function handler(req, res) {
       database: "PostgreSQL",
       serverTime: result.rows[0].server_time,
       freeTrialsReady: result.rows[0].free_trials_ready,
-      schemaVersion: "free-trials-v2",
+      schemaVersion: "free-trials-v3-idempotent",
     });
   } catch (error) {
     console.error("Database status error:", {

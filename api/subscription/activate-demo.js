@@ -122,6 +122,7 @@ export default async function handler(req, res) {
       return res.status(409).json({
         error:
           "The 3-day free trial has already been used for this Telegram account.",
+        code: "FREE_TRIAL_USED",
       });
     }
 
@@ -129,12 +130,21 @@ export default async function handler(req, res) {
       return res.status(409).json({
         error:
           "You already have an active subscription. The free trial cannot replace it.",
+        code: "ACTIVE_SUBSCRIPTION_EXISTS",
       });
     }
 
     if (error?.code === "INVALID_PLAN") {
       return res.status(400).json({
         error: "Invalid subscription plan.",
+        code: error.code,
+      });
+    }
+
+    if (error?.code === "USER_NOT_FOUND") {
+      return res.status(401).json({
+        error: "Telegram account was not found. Please log in again.",
+        code: error.code,
       });
     }
 
@@ -145,6 +155,7 @@ export default async function handler(req, res) {
       error:
         `Unable to activate the free trial right now. Database code: ${diagnosticCode}.`,
       diagnosticCode,
+      code: diagnosticCode,
     });
   }
 }

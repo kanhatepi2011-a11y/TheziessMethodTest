@@ -2,6 +2,14 @@
 
 All notable changes to the NoBlur project are documented in this file.
 
+## [2.6.1] - 2026-07-27
+
+- Made FREE 3-day trial activation idempotent and recoverable after interrupted responses
+- Removed dependency on a pre-existing unique constraint for free_trials activation
+- Replaced advisory locking with a PostgreSQL users-row lock
+- Preserved successful subscription state during temporary session refresh failures
+- Added clearer API diagnostic codes and frontend recovery handling
+
 ## [2.6.0] - 2026-07-12
 
 - VFI simplified to single-pass; segment/concat removed

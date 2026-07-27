@@ -257,31 +257,90 @@ export async function hasUsedFreeTrial(userId) {
   return Boolean(result.rows[0]);
 }
 
-async function activateFreeTrial(client, userId) {
-  const usedTrialResult = await client.query(
+function toFreeTrialSubscription(trial) {
+  return {
+    id: `trial-${trial.id}`,
+    user_id: trial.user_id,
+    plan_id: "free",
+    status: trial.status,
+    payment_method: "free-trial",
+    starts_at: trial.starts_at,
+    expires_at: trial.expires_at,
+    created_at: trial.created_at,
+    updated_at: trial.updated_at,
+  };
+}
+
+function isActiveTrialRow(trial) {
+  return Boolean(
+    trial &&
+      trial.status === "active" &&
+      trial.expires_at &&
+      new Date(trial.expires_at).getTime() > Date.now(),
+  );
+}
+
+function freeTrialUsedError() {
+  const error = new Error(
+    "The 3-day free trial has already been used for this Telegram account.",
+  );
+  error.code = "FREE_TRIAL_USED";
+  return error;
+}
+
+async function findStoredFreeTrial(client, userId) {
+  const result = await client.query(
     `
-      SELECT 1
+      SELECT *
       FROM free_trials
       WHERE user_id = $1
-
-      UNION ALL
-
-      SELECT 1
-      FROM subscriptions
-      WHERE user_id = $1
-        AND plan_id::TEXT = 'free'
-
+      ORDER BY created_at DESC, id DESC
       LIMIT 1
     `,
     [userId],
   );
 
-  if (usedTrialResult.rows[0]) {
-    const error = new Error(
-      "The 3-day free trial has already been used for this Telegram account.",
-    );
-    error.code = "FREE_TRIAL_USED";
-    throw error;
+  return result.rows[0] || null;
+}
+
+async function findLegacyFreeSubscription(client, userId) {
+  const result = await client.query(
+    `
+      SELECT *
+      FROM subscriptions
+      WHERE user_id = $1
+        AND plan_id::TEXT = 'free'
+      ORDER BY created_at DESC, id DESC
+      LIMIT 1
+    `,
+    [userId],
+  );
+
+  return result.rows[0] || null;
+}
+
+async function activateFreeTrial(client, userId) {
+  // Make this endpoint idempotent. If the database activation succeeded but
+  // the browser lost the response, clicking the button again must restore the
+  // same active trial instead of permanently returning "already used".
+  const storedTrial = await findStoredFreeTrial(client, userId);
+
+  if (isActiveTrialRow(storedTrial)) {
+    return toFreeTrialSubscription(storedTrial);
+  }
+
+  const legacyTrial = await findLegacyFreeSubscription(client, userId);
+
+  if (isActiveTrialRow(legacyTrial)) {
+    return {
+      ...legacyTrial,
+      plan_id: "free",
+      payment_method: legacyTrial.payment_method || "free-trial",
+    };
+  }
+
+  if (storedTrial || legacyTrial) {
+    throw freeTrialUsedError();
   }
 
   const activePaidResult = await client.query(
@@ -291,7 +350,7 @@ async function activateFreeTrial(client, userId) {
       WHERE user_id = $1
         AND status = 'active'
         AND (
-          plan_id = 'max'
+          plan_id::TEXT = 'max'
           OR expires_at > NOW()
         )
       LIMIT 1
@@ -307,49 +366,55 @@ async function activateFreeTrial(client, userId) {
     throw error;
   }
 
-  const result = await client.query(
-    `
-      INSERT INTO free_trials (
-        user_id,
-        status,
-        starts_at,
-        expires_at,
-        updated_at
-      )
-      VALUES (
-        $1,
-        'active',
-        NOW(),
-        NOW() + INTERVAL '3 days',
-        NOW()
-      )
-      ON CONFLICT (user_id) DO NOTHING
-      RETURNING *
-    `,
-    [userId],
-  );
+  await client.query("SAVEPOINT free_trial_insert");
 
-  if (!result.rows[0]) {
-    const error = new Error(
-      "The 3-day free trial has already been used for this Telegram account.",
+  try {
+    // Do not depend on ON CONFLICT(user_id). Some older Neon databases have a
+    // free_trials table created before the unique constraint was added. The
+    // users row lock in activateSubscription serializes requests safely.
+    const result = await client.query(
+      `
+        INSERT INTO free_trials (
+          user_id,
+          status,
+          starts_at,
+          expires_at,
+          updated_at
+        )
+        VALUES (
+          $1,
+          'active',
+          NOW(),
+          NOW() + INTERVAL '3 days',
+          NOW()
+        )
+        RETURNING *
+      `,
+      [userId],
     );
-    error.code = "FREE_TRIAL_USED";
+
+    await client.query("RELEASE SAVEPOINT free_trial_insert");
+    return toFreeTrialSubscription(result.rows[0]);
+  } catch (error) {
+    // A constraint violation aborts the current PostgreSQL statement. Restore
+    // the transaction to the savepoint before attempting the recovery read.
+    await client.query("ROLLBACK TO SAVEPOINT free_trial_insert");
+
+    // A concurrent request or an older unique index may have inserted the row
+    // first. Re-read it and return the active access instead of showing an
+    // activation error.
+    if (error?.code === "23505") {
+      const concurrentTrial = await findStoredFreeTrial(client, userId);
+
+      if (isActiveTrialRow(concurrentTrial)) {
+        return toFreeTrialSubscription(concurrentTrial);
+      }
+
+      throw freeTrialUsedError();
+    }
+
     throw error;
   }
-
-  const trial = result.rows[0];
-
-  return {
-    id: `trial-${trial.id}`,
-    user_id: trial.user_id,
-    plan_id: "free",
-    status: trial.status,
-    payment_method: "free-trial",
-    starts_at: trial.starts_at,
-    expires_at: trial.expires_at,
-    created_at: trial.created_at,
-    updated_at: trial.updated_at,
-  };
 }
 
 async function recordPaidDemoPayment({
@@ -466,12 +531,19 @@ export async function activateSubscription({
   try {
     await client.query("BEGIN");
 
-    // One lock per database user prevents double-click races across Vercel
-    // instances without depending on the exact numeric type of userId.
-    await client.query(
-      "SELECT pg_advisory_xact_lock(hashtextextended($1::TEXT, 0))",
-      [String(userId)],
+    // Lock the existing user row so repeated clicks and multiple Vercel
+    // instances cannot race. This avoids relying on advisory-lock functions
+    // that may behave differently through pooled PostgreSQL connections.
+    const lockedUser = await client.query(
+      "SELECT id FROM users WHERE id = $1 FOR UPDATE",
+      [userId],
     );
+
+    if (!lockedUser.rows[0]) {
+      const error = new Error("Telegram account was not found. Please log in again.");
+      error.code = "USER_NOT_FOUND";
+      throw error;
+    }
 
     if (planId === "free") {
       subscription = await activateFreeTrial(client, userId);

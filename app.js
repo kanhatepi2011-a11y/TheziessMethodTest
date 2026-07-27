@@ -462,7 +462,10 @@ async function loadServerSession({ retries = 2, preserveExistingSubscription = f
 
             const storedUser = readStoredTelegramUser();
             currentUser = storedUser;
-            currentSubscription = null;
+            currentSubscription =
+                preserveExistingSubscription && hasActiveSubscription()
+                    ? currentSubscription
+                    : null;
             updateAccessUI();
             return Boolean(storedUser);
         } catch (error) {
@@ -476,7 +479,10 @@ async function loadServerSession({ retries = 2, preserveExistingSubscription = f
 
     const storedUser = readStoredTelegramUser();
     currentUser = storedUser;
-    currentSubscription = null;
+    currentSubscription =
+        preserveExistingSubscription && hasActiveSubscription()
+            ? currentSubscription
+            : null;
 
     if (lastError) {
         console.warn("Server session unavailable; using Telegram browser fallback", lastError);
@@ -644,6 +650,31 @@ async function initializeMembership() {
                 preserveExistingSubscription: true,
             });
         } catch (error) {
+            // The server may have committed the trial even when the response
+            // was interrupted. Re-read the signed session before showing an
+            // error so a successful activation is never hidden from the user.
+            await loadServerSession({
+                retries: 2,
+                preserveExistingSubscription: true,
+            });
+
+            const recovered = hasActiveSubscription() &&
+                currentSubscription?.planId === activatedPlan.id;
+
+            if (recovered) {
+                pendingPlan = null;
+                closeModal("paymentModal");
+                hideSubscriptionPlans();
+                updateAccessUI();
+                logMessage(
+                    activatedPlan.id === "free"
+                        ? "Your 3-day free trial is active. Compression is now unlocked."
+                        : `${activatedPlan.name} subscription activated. Compression is now unlocked.`,
+                    "success",
+                );
+                return;
+            }
+
             if (paymentNotice) {
                 paymentNotice.textContent = error.message;
                 paymentNotice.classList.add("error");
