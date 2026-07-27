@@ -1,8 +1,6 @@
 import {
   activateSubscription,
-  findActiveSubscription,
   findUserById,
-  hasUsedFreeTrial,
 } from "../_db.js";
 
 import {
@@ -17,6 +15,24 @@ const ALLOWED_PLANS = new Set([
   "max",
 ]);
 
+function readJsonBody(req) {
+  if (!req.body) return {};
+
+  if (typeof req.body === "object") {
+    return req.body;
+  }
+
+  if (typeof req.body === "string") {
+    try {
+      return JSON.parse(req.body);
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({
@@ -26,105 +42,59 @@ export default async function handler(req, res) {
 
   res.setHeader(
     "Cache-Control",
-    "no-store",
+    "private, no-store, no-cache, must-revalidate, max-age=0",
   );
+  res.setHeader("Vary", "Cookie");
 
   try {
     const session = getSession(req);
 
     if (!session?.userId) {
       return res.status(401).json({
-        error:
-          "Please log in with Telegram first.",
+        error: "Please log in with Telegram first.",
       });
     }
 
-    const user = await findUserById(
-      session.userId,
-    );
+    const user = await findUserById(session.userId);
 
     if (!user) {
       return res.status(401).json({
-        error:
-          "Telegram account was not found.",
+        error: "Telegram account was not found. Please log in again.",
       });
     }
 
+    const body = readJsonBody(req);
     const planId =
-      typeof req.body?.planId === "string"
-        ? req.body.planId.toLowerCase()
+      typeof body.planId === "string"
+        ? body.planId.trim().toLowerCase()
         : "";
 
     if (!ALLOWED_PLANS.has(planId)) {
       return res.status(400).json({
-        error:
-          "Invalid subscription plan.",
+        error: "Invalid subscription plan.",
       });
     }
 
-    if (
-      planId === "free" &&
-      await findActiveSubscription(user.id)
-    ) {
-      return res.status(409).json({
-        error:
-          "You already have an active subscription. The free trial cannot replace it.",
-      });
-    }
-
-    if (
-      planId === "free" &&
-      await hasUsedFreeTrial(user.id)
-    ) {
-      return res.status(409).json({
-        error:
-          "The 3-day free trial has already been used for this Telegram account.",
-      });
-    }
-
-    const subscription =
-      await activateSubscription({
-        userId:
-          user.id,
-
-        planId,
-
-        paymentMethod:
-          planId === "free"
-            ? "free-trial"
-            : "khqr-demo",
-      });
+    const subscription = await activateSubscription({
+      userId: user.id,
+      planId,
+      paymentMethod:
+        planId === "free"
+          ? "free-trial"
+          : "khqr-demo",
+    });
 
     const publicSubscription = {
-      id:
-        String(subscription.id),
-
-      planId:
-        subscription.plan_id,
-
-      status:
-        subscription.status,
-
-      activatedAt:
-        new Date(
-          subscription.starts_at,
-        ).getTime(),
-
-      expiresAt:
-        subscription.expires_at
-          ? new Date(
-              subscription.expires_at,
-            ).getTime()
-          : null,
-
-      paymentMethod:
-        subscription.payment_method,
+      id: String(subscription.id),
+      planId: subscription.plan_id,
+      status: subscription.status,
+      activatedAt: new Date(subscription.starts_at).getTime(),
+      expiresAt: subscription.expires_at
+        ? new Date(subscription.expires_at).getTime()
+        : null,
+      paymentMethod: subscription.payment_method || "",
     };
 
-    // Persist the newly activated plan in the signed HttpOnly session as well
-    // as PostgreSQL. The frontend can therefore show the active subscription
-    // immediately and it remains available if a database refresh is briefly
-    // unavailable on the next serverless request.
     setSessionCookie(res, {
       ...session,
       subscription: publicSubscription,
@@ -136,14 +106,18 @@ export default async function handler(req, res) {
       subscription: publicSubscription,
     });
   } catch (error) {
-    console.error(
-      "Subscription activation error:",
-      error,
-    );
+    console.error("Subscription activation error:", {
+      message: error?.message,
+      code: error?.code,
+      constraint: error?.constraint,
+      detail: error?.detail,
+      stack: error?.stack,
+    });
 
     if (
-      error?.code === "23505" &&
-      error?.constraint === "subscriptions_one_free_trial_per_user"
+      error?.code === "FREE_TRIAL_USED" ||
+      (error?.code === "23505" &&
+        error?.constraint === "subscriptions_one_free_trial_per_user")
     ) {
       return res.status(409).json({
         error:
@@ -151,9 +125,23 @@ export default async function handler(req, res) {
       });
     }
 
+    if (error?.code === "ACTIVE_SUBSCRIPTION_EXISTS") {
+      return res.status(409).json({
+        error:
+          "You already have an active subscription. The free trial cannot replace it.",
+      });
+    }
+
+    if (error?.code === "INVALID_PLAN") {
+      return res.status(400).json({
+        error: "Invalid subscription plan.",
+      });
+    }
+
     return res.status(500).json({
       error:
-        "Unable to activate subscription.",
+        "Unable to activate the free trial right now. Please redeploy the latest update and try once more.",
+      diagnosticCode: error?.code || "SUBSCRIPTION_ACTIVATION_FAILED",
     });
   }
 }
