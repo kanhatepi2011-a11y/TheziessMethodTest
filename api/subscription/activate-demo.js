@@ -138,10 +138,13 @@ export default async function handler(req, res) {
       });
     }
 
+    const diagnosticCode =
+      error?.code || "SUBSCRIPTION_ACTIVATION_FAILED";
+
     return res.status(500).json({
       error:
-        "Unable to activate the free trial right now. Please redeploy the latest update and try once more.",
-      diagnosticCode: error?.code || "SUBSCRIPTION_ACTIVATION_FAILED",
+        `Unable to activate the free trial right now. Database code: ${diagnosticCode}.`,
+      diagnosticCode,
     });
   }
 }
