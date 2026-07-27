@@ -432,7 +432,7 @@ function requireActiveSubscription({ focusPlans = true } = {}) {
     return false;
 }
 
-async function loadServerSession({ retries = 2 } = {}) {
+async function loadServerSession({ retries = 2, preserveExistingSubscription = false } = {}) {
     let lastError = null;
 
     for (let attempt = 0; attempt <= retries; attempt += 1) {
@@ -451,7 +451,10 @@ async function loadServerSession({ retries = 2 } = {}) {
 
             if (data.authenticated && data.user) {
                 currentUser = data.user;
-                currentSubscription = data.subscription || null;
+                currentSubscription = data.subscription ||
+                    (preserveExistingSubscription && hasActiveSubscription()
+                        ? currentSubscription
+                        : null);
                 storeTelegramUser(data.user);
                 updateAccessUI();
                 return true;
@@ -569,31 +572,78 @@ async function initializeMembership() {
     }));
     document.getElementById("confirmPaymentBtn")?.addEventListener("click", async () => {
         if (!pendingPlan || !currentUser) return;
+
         const button = document.getElementById("confirmPaymentBtn");
+        const activatedPlan = pendingPlan;
+        const originalLabel = button.textContent;
+        const paymentNotice = document.getElementById("paymentNotice");
+
         button.disabled = true;
+        button.setAttribute("aria-busy", "true");
+        button.textContent = activatedPlan.id === "free"
+            ? "Activating Free Trial…"
+            : "Activating Plan…";
+
+        if (paymentNotice) {
+            paymentNotice.classList.remove("error");
+            paymentNotice.textContent = activatedPlan.id === "free"
+                ? "Activating your 3-day free trial. Please wait…"
+                : "Activating your subscription. Please wait…";
+        }
+
         try {
-            const response = await fetch("/api/subscription/activate-demo", {
+            const response = await fetch(`/api/subscription/activate-demo?t=${Date.now()}`, {
                 method: "POST",
-                credentials: "same-origin",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ planId: pendingPlan.id }),
+                credentials: "include",
+                cache: "no-store",
+                headers: {
+                    "Content-Type": "application/json",
+                    Accept: "application/json",
+                },
+                body: JSON.stringify({ planId: activatedPlan.id }),
             });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || "Demo activation failed");
-            const activatedPlan = pendingPlan;
+
+            const rawBody = await response.text();
+            let data = {};
+
+            try {
+                data = rawBody ? JSON.parse(rawBody) : {};
+            } catch {
+                throw new Error("The server returned an invalid activation response.");
+            }
+
+            if (!response.ok) {
+                throw new Error(data.error || "Subscription activation failed.");
+            }
+
+            if (!data.subscription?.planId || data.subscription.status !== "active") {
+                throw new Error("The subscription was not activated correctly. Please try again.");
+            }
+
+            // Apply the successful server response immediately. This unlocks
+            // compression without requiring a page refresh or another login.
             currentSubscription = data.subscription;
             pendingPlan = null;
+            updateAccessUI();
+
             closeModal("paymentModal");
             hideSubscriptionPlans();
+
             logMessage(
                 activatedPlan.id === "free"
-                    ? "Your 3-day free trial is now active."
-                    : `${activatedPlan.name} subscription activated (KHQR demo).`,
+                    ? "Your 3-day free trial is active. Compression is now unlocked."
+                    : `${activatedPlan.name} subscription activated. Compression is now unlocked.`,
                 "success",
             );
-            updateAccessUI();
+
+            // Re-read the signed session in the background so the subscription
+            // also remains active after refresh. Preserve the successful API
+            // response if the database read is briefly delayed.
+            await loadServerSession({
+                retries: 3,
+                preserveExistingSubscription: true,
+            });
         } catch (error) {
-            const paymentNotice = document.getElementById("paymentNotice");
             if (paymentNotice) {
                 paymentNotice.textContent = error.message;
                 paymentNotice.classList.add("error");
@@ -601,6 +651,8 @@ async function initializeMembership() {
             logMessage(error.message, "error");
         } finally {
             button.disabled = false;
+            button.removeAttribute("aria-busy");
+            button.textContent = originalLabel;
         }
     });
     document.getElementById("patchAccessHint")?.addEventListener("click", () => {

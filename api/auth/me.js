@@ -6,6 +6,7 @@ import {
 import {
   clearSessionCookie,
   getSession,
+  publicSession,
 } from "../_session.js";
 
 function toPublicUser(user) {
@@ -65,7 +66,7 @@ export default async function handler(req, res) {
     // Use it immediately so a temporary database failure cannot make a
     // successfully logged-in user appear logged out on the frontend.
     let publicUser = toPublicUser(session.user);
-    let publicSubscription = null;
+    let publicSubscription = publicSession(session).subscription;
 
     try {
       const databaseUser = await findUserById(session.userId);

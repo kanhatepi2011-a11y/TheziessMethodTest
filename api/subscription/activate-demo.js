@@ -7,6 +7,7 @@ import {
 
 import {
   getSession,
+  setSessionCookie,
 } from "../_session.js";
 
 const ALLOWED_PLANS = new Set([
@@ -94,34 +95,45 @@ export default async function handler(req, res) {
             : "khqr-demo",
       });
 
+    const publicSubscription = {
+      id:
+        String(subscription.id),
+
+      planId:
+        subscription.plan_id,
+
+      status:
+        subscription.status,
+
+      activatedAt:
+        new Date(
+          subscription.starts_at,
+        ).getTime(),
+
+      expiresAt:
+        subscription.expires_at
+          ? new Date(
+              subscription.expires_at,
+            ).getTime()
+          : null,
+
+      paymentMethod:
+        subscription.payment_method,
+    };
+
+    // Persist the newly activated plan in the signed HttpOnly session as well
+    // as PostgreSQL. The frontend can therefore show the active subscription
+    // immediately and it remains available if a database refresh is briefly
+    // unavailable on the next serverless request.
+    setSessionCookie(res, {
+      ...session,
+      subscription: publicSubscription,
+      subscriptionUpdatedAt: Date.now(),
+    });
+
     return res.status(200).json({
       ok: true,
-
-      subscription: {
-        id:
-          String(subscription.id),
-
-        planId:
-          subscription.plan_id,
-
-        status:
-          subscription.status,
-
-        activatedAt:
-          new Date(
-            subscription.starts_at,
-          ).getTime(),
-
-        expiresAt:
-          subscription.expires_at
-            ? new Date(
-                subscription.expires_at,
-              ).getTime()
-            : null,
-
-        paymentMethod:
-          subscription.payment_method,
-      },
+      subscription: publicSubscription,
     });
   } catch (error) {
     console.error(
