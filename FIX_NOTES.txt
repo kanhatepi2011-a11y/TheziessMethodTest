@@ -1,20 +1,26 @@
-TheZiess Method — Fix Notes
+Telegram login fix
+==================
 
-Fixed:
-- Replaced the corrupted/truncated index.html.
-- Restored the full HTML document and stylesheet link.
-- Kept the Telegram OIDC login button that redirects to /api/auth/telegram.
-- Kept style.css at the project root.
-- Generated src/changelog-data.mjs.
+Fixed the main issue shown in the screenshot:
+- Added the missing click handler for the "Continue with Telegram" button.
+- The button now opens /api/auth/telegram and starts the OIDC + PKCE flow.
+- Added loading state and back-button recovery.
+- Replaced the old hard-coded authorized domain with the current callback URL.
+- Added TELEGRAM_CLIENT_ID, TELEGRAM_CLIENT_SECRET and TELEGRAM_REDIRECT_URI to .env.example.
+- Corrected README setup: BotFather must allow both the production origin and /api/auth/telegram/callback.
+- Added a safe redirect URI helper so local/current-host fallback works when TELEGRAM_REDIRECT_URI is omitted.
 
-Deploy:
-1. npm install
-2. npm run build
-3. git add .
-4. git commit -m "Restore complete HTML and CSS"
-5. git push origin main
+Important for your current Vercel deployment
+--------------------------------------------
+Use the same stable domain everywhere. For the screenshot domain, configure:
 
-Vercel settings:
-- Framework Preset: Vite
-- Build Command: npm run build
-- Output Directory: dist
+Allowed URL 1:
+https://theziess-method-test-qabd.vercel.app
+
+Allowed URL 2 / callback:
+https://theziess-method-test-qabd.vercel.app/api/auth/telegram/callback
+
+Vercel environment variable:
+TELEGRAM_REDIRECT_URI=https://theziess-method-test-qabd.vercel.app/api/auth/telegram/callback
+
+Also add TELEGRAM_CLIENT_ID, TELEGRAM_CLIENT_SECRET, SESSION_SECRET and DATABASE_URL, then redeploy.

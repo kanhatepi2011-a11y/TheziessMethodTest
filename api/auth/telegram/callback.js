@@ -8,6 +8,10 @@ import {
 } from "../../_db.js";
 
 import {
+  getTelegramRedirectUri,
+} from "../../_telegram.js";
+
+import {
   appendCookies,
   createClearCookie,
   createSessionCookie,
@@ -92,12 +96,11 @@ export default async function handler(req, res) {
       process.env.TELEGRAM_CLIENT_SECRET;
 
     const redirectUri =
-      process.env.TELEGRAM_REDIRECT_URI;
+      getTelegramRedirectUri(req);
 
     if (
       !clientId ||
-      !clientSecret ||
-      !redirectUri
+      !clientSecret
     ) {
       return res.status(500).send(
         "Telegram OIDC configuration is incomplete.",

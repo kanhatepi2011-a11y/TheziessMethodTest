@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
 
+import { getTelegramRedirectUri } from "../_telegram.js";
+
 function base64Url(value) {
   return Buffer.from(value)
     .toString("base64")
@@ -18,13 +20,20 @@ export default async function handler(req, res) {
   const clientId =
     process.env.TELEGRAM_CLIENT_ID;
 
-  const redirectUri =
-    process.env.TELEGRAM_REDIRECT_URI;
+  let redirectUri;
 
-  if (!clientId || !redirectUri) {
+  try {
+    redirectUri = getTelegramRedirectUri(req);
+  } catch (error) {
+    return res.status(500).json({
+      error: error.message,
+    });
+  }
+
+  if (!clientId) {
     return res.status(500).json({
       error:
-        "TELEGRAM_CLIENT_ID or TELEGRAM_REDIRECT_URI is missing.",
+        "TELEGRAM_CLIENT_ID is missing in Vercel Environment Variables.",
     });
   }
 

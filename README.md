@@ -98,19 +98,42 @@ See [CHANGELOG.md](./CHANGELOG.md) for the full release history.
 
 ## Real Telegram Login setup
 
-This build uses Telegram Login Widget with bot `@theziess_method_bot` and callback:
+This build uses Telegram OpenID Connect (Authorization Code + PKCE).
 
-`https://theziess-method-chi.vercel.app/api/auth/telegram`
+### 1. Choose one stable production domain
 
-1. Open `@BotFather` in Telegram.
-2. Send `/setdomain`, choose `@theziess_method_bot`, and enter:
-   `theziess-method-chi.vercel.app`
-3. In Vercel → Project Settings → Environment Variables, add:
-   - `TELEGRAM_BOT_TOKEN` — your private bot token (never expose it in frontend code)
-   - `SESSION_SECRET` — a long random value, at least 24 characters
-4. Redeploy the project.
+Example:
 
-Telegram identity and demo subscription are stored in an HTTP-only signed cookie. The KHQR flow remains demo-only.
+`https://theziess-method-test-qabd.vercel.app`
+
+Avoid changing between Vercel preview domains because Telegram only accepts URLs that were registered beforehand.
+
+### 2. Configure BotFather
+
+1. Open `@BotFather`.
+2. Select your bot → **Bot Settings** → **Web Login**.
+3. Add both Allowed URLs (replace the example domain with your real production domain):
+   - `https://theziess-method-test-qabd.vercel.app`
+   - `https://theziess-method-test-qabd.vercel.app/api/auth/telegram/callback`
+4. Copy the **Client ID** and **Client Secret** shown by BotFather.
+
+### 3. Configure Vercel Environment Variables
+
+Add these variables in **Vercel → Project Settings → Environment Variables**:
+
+- `TELEGRAM_CLIENT_ID` — Client ID from BotFather Web Login
+- `TELEGRAM_CLIENT_SECRET` — Client Secret from BotFather Web Login
+- `TELEGRAM_REDIRECT_URI` — exact callback URL, for example `https://theziess-method-test-qabd.vercel.app/api/auth/telegram/callback`
+- `SESSION_SECRET` — a random value of at least 24 characters
+- `DATABASE_URL` — your PostgreSQL connection string
+
+`TELEGRAM_BOT_TOKEN` is not used by this OIDC login flow. It is only needed if another backend feature sends Telegram bot messages.
+
+### 4. Redeploy and test
+
+After saving the environment variables, redeploy the project. Open the production domain, click **Login with Telegram**, then click **Continue with Telegram**.
+
+The initiation endpoint is `/api/auth/telegram`. The callback endpoint registered with Telegram is `/api/auth/telegram/callback`.
 
 ## PostgreSQL database setup
 
@@ -118,7 +141,7 @@ This version permanently stores Telegram users, subscriptions, and KHQR demo pay
 
 1. Create a PostgreSQL database. Neon or Supabase works well with Vercel.
 2. Add the PostgreSQL connection string as `DATABASE_URL` in Vercel → Project Settings → Environment Variables.
-3. Keep `TELEGRAM_BOT_TOKEN` and `SESSION_SECRET` configured.
+3. Keep `TELEGRAM_CLIENT_ID`, `TELEGRAM_CLIENT_SECRET`, `TELEGRAM_REDIRECT_URI`, and `SESSION_SECRET` configured.
 4. Redeploy the project.
 5. Open `/api/db-status` to confirm the database connection.
 

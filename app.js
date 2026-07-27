@@ -147,6 +147,43 @@ async function initializeMembership() {
         logMessage("Telegram account verified successfully.", "success");
     }
     document.getElementById("telegramLoginBtn")?.addEventListener("click", () => openModal("telegramModal"));
+
+    const telegramOidcLoginBtn = document.getElementById("telegramOidcLoginBtn");
+    const telegramLoginError = document.getElementById("telegramLoginError");
+    const telegramCallbackUrl = document.getElementById("telegramCallbackUrl");
+
+    if (telegramCallbackUrl) {
+        telegramCallbackUrl.textContent = `${location.origin}/api/auth/telegram/callback`;
+    }
+
+    const resetTelegramLoginButton = () => {
+        if (!telegramOidcLoginBtn) return;
+        telegramOidcLoginBtn.disabled = false;
+        telegramOidcLoginBtn.removeAttribute("aria-busy");
+        const label = telegramOidcLoginBtn.querySelector("span");
+        if (label) label.textContent = "Continue with Telegram";
+    };
+
+    telegramOidcLoginBtn?.addEventListener("click", () => {
+        if (telegramLoginError) {
+            telegramLoginError.hidden = true;
+            telegramLoginError.textContent = "";
+        }
+
+        telegramOidcLoginBtn.disabled = true;
+        telegramOidcLoginBtn.setAttribute("aria-busy", "true");
+        const label = telegramOidcLoginBtn.querySelector("span");
+        if (label) label.textContent = "Connecting to Telegram…";
+
+        // Start the server-side OIDC + PKCE flow. The previous build had no
+        // click handler here, so the button looked active but did nothing.
+        window.location.assign("/api/auth/telegram");
+    });
+
+    // Browsers may restore the page from the back-forward cache after a user
+    // cancels Telegram login. Re-enable the button in that case.
+    window.addEventListener("pageshow", resetTelegramLoginButton);
+
     document.getElementById("openPlansBtn")?.addEventListener("click", () => document.getElementById("subscriptionPanel")?.scrollIntoView({ behavior: "smooth" }));
     document.getElementById("logoutBtn")?.addEventListener("click", async () => {
         await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
