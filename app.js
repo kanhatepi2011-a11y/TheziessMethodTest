@@ -331,9 +331,38 @@ function configurePlanActivationModal(plan) {
     }
 }
 
+function setSubscriptionPlansOpen(open, { scroll = true } = {}) {
+    const panel = document.getElementById("subscriptionPanel");
+    const hint = document.getElementById("patchAccessHint");
+    if (!panel) return;
+
+    panel.hidden = !open;
+    panel.setAttribute("aria-hidden", String(!open));
+    hint?.setAttribute("aria-expanded", String(open));
+
+    if (open && scroll) {
+        requestAnimationFrame(() => {
+            panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            panel.classList.remove("plans-reveal");
+            void panel.offsetWidth;
+            panel.classList.add("plans-reveal");
+        });
+    }
+}
+
 function showSubscriptionPlans() {
     closeModal("profileModal");
-    focusNavigationSection(document.getElementById("subscriptionPanel"));
+    setSubscriptionPlansOpen(true);
+}
+
+function hideSubscriptionPlans() {
+    setSubscriptionPlansOpen(false, { scroll: false });
+}
+
+function toggleSubscriptionPlans() {
+    const panel = document.getElementById("subscriptionPanel");
+    if (!panel) return;
+    setSubscriptionPlansOpen(panel.hidden);
 }
 
 function updateAccessUI() {
@@ -396,7 +425,7 @@ function requireActiveSubscription({ focusPlans = true } = {}) {
     );
 
     if (focusPlans) {
-        focusNavigationSection(document.getElementById("subscriptionPanel"));
+        showSubscriptionPlans();
     }
 
     updateAccessUI();
@@ -513,6 +542,7 @@ async function initializeMembership() {
     window.addEventListener("pageshow", resetTelegramLoginButton);
 
     document.getElementById("openPlansBtn")?.addEventListener("click", showSubscriptionPlans);
+    document.getElementById("closeSubscriptionPlansBtn")?.addEventListener("click", hideSubscriptionPlans);
     document.getElementById("logoutBtn")?.addEventListener("click", async () => {
         try {
             await fetch("/api/auth/logout", {
@@ -554,6 +584,7 @@ async function initializeMembership() {
             currentSubscription = data.subscription;
             pendingPlan = null;
             closeModal("paymentModal");
+            hideSubscriptionPlans();
             logMessage(
                 activatedPlan.id === "free"
                     ? "Your 3-day free trial is now active."
@@ -577,7 +608,7 @@ async function initializeMembership() {
             openModal("telegramModal");
             return;
         }
-        showSubscriptionPlans();
+        toggleSubscriptionPlans();
     });
     document.getElementById("lockActionBtn")?.addEventListener("click", () => openModal("telegramModal"));
     updateAccessUI();
@@ -664,7 +695,7 @@ function initializeBottomNavigation() {
     document.getElementById("profilePlansBtn")?.addEventListener("click", () => {
         closeModal("profileModal");
         setActiveNavigation("profile");
-        focusNavigationSection(document.getElementById("subscriptionPanel"));
+        showSubscriptionPlans();
     });
 
     document.getElementById("profileLogoutBtn")?.addEventListener("click", () => {
@@ -1070,6 +1101,8 @@ function updatePatchButton() {
             hint.hidden = false;
             hint.textContent = "Login with Telegram, then choose the FREE 3-day trial or a paid plan.";
             hint.dataset.action = "login";
+            hint.setAttribute("aria-expanded", "false");
+            hideSubscriptionPlans();
         }
         return;
     }
@@ -1083,6 +1116,8 @@ function updatePatchButton() {
             hint.hidden = false;
             hint.textContent = "No active subscription. Click here to view FREE, PRO, PREMIUM, or MAX plans.";
             hint.dataset.action = "plans";
+            const plansPanel = document.getElementById("subscriptionPanel");
+            hint.setAttribute("aria-expanded", String(Boolean(plansPanel && !plansPanel.hidden)));
         }
         return;
     }
