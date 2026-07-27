@@ -847,6 +847,10 @@ body {
     transform: rotate(45deg);
 }
 
+.history-container[hidden] {
+    display: none !important;
+}
+
 .history-container {
     display: flex;
     flex-direction: column;

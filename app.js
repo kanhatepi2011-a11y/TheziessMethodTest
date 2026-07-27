@@ -103,6 +103,7 @@ const fileListEl = document.getElementById("fileList");
 const historyList = document.getElementById("historyList");
 const historyBadge = document.getElementById("historyBadge");
 const historyHeader = document.getElementById("historyHeader");
+const historySection = document.getElementById("historySection");
 const clearHistoryBtn = document.getElementById("clearHistoryBtn");
 
 let selectedFiles = [];
@@ -742,6 +743,15 @@ function focusNavigationSection(element) {
     });
 }
 
+function setHistorySectionVisible(visible) {
+    if (!historySection) return;
+    historySection.hidden = !visible;
+    historySection.setAttribute("aria-hidden", String(!visible));
+    if (!visible) {
+        historySection.classList.remove("nav-highlight");
+    }
+}
+
 function initializeBottomNavigation() {
     const compressButton = document.getElementById("navCompressBtn");
     const historyButton = document.getElementById("navHistoryBtn");
@@ -750,6 +760,7 @@ function initializeBottomNavigation() {
 
     compressButton?.addEventListener("click", () => {
         if (!requireLogin()) return;
+        setHistorySectionVisible(false);
         setActiveNavigation("compress");
         focusNavigationSection(dropZone);
     });
@@ -757,6 +768,7 @@ function initializeBottomNavigation() {
     historyButton?.addEventListener("click", async () => {
         if (!requireLogin()) return;
         await renderHistoryList();
+        setHistorySectionVisible(true);
         const historyContainer = historyHeader?.parentElement;
         historyContainer?.classList.remove("collapsed");
         document.getElementById("historyToggleBtn")?.setAttribute("aria-expanded", "true");
@@ -793,6 +805,7 @@ function initializeBottomNavigation() {
         }
     });
 
+    setHistorySectionVisible(false);
     setActiveNavigation("compress");
 }
 
