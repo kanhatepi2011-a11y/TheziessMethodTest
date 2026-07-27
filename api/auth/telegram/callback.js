@@ -291,10 +291,37 @@ export default async function handler(req, res) {
       ),
     ]);
 
-    return res.redirect(
-      302,
-      "/?telegram_login=success",
-    );
+    // Save a browser-side copy of the public Telegram profile before
+    // returning home. The signed HttpOnly cookie remains the real session,
+    // while this safe fallback prevents a service-worker/browser cookie race
+    // from leaving the UI permanently locked after a successful callback.
+    const publicUserJson = JSON.stringify(session.user)
+      .replace(/</g, "\\u003c")
+      .replace(/\u2028/g, "\\u2028")
+      .replace(/\u2029/g, "\\u2029");
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+    return res.status(200).send(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Telegram login complete</title>
+</head>
+<body>
+  <script>
+    try {
+      localStorage.setItem("theziess.telegram.user", JSON.stringify(${publicUserJson}));
+      localStorage.setItem("theziess.telegram.connectedAt", String(Date.now()));
+    } catch (error) {
+      console.warn("Unable to save Telegram login fallback", error);
+    }
+    window.location.replace("/?telegram_login=success");
+  </script>
+  <p>Telegram login completed. Returning to the app…</p>
+</body>
+</html>`);
   } catch (error) {
     console.error(
       "Telegram OIDC callback error:",

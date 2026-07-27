@@ -30,6 +30,15 @@ if (typeof window === "undefined") {
         if (!r.url.startsWith(self.location.origin)) {
             return;
         }
+
+        // Authentication endpoints must go directly to the network. Rebuilding
+        // OAuth/API responses inside a service worker can interfere with
+        // redirects and Set-Cookie handling in some browsers.
+        const requestUrl = new URL(r.url);
+        if (requestUrl.pathname.startsWith("/api/")) {
+            return;
+        }
+
         if (r.cache === "only-if-cached" && r.mode !== "same-origin") {
             return;
         }

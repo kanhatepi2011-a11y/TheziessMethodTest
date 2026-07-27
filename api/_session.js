@@ -94,9 +94,12 @@ export function getSession(req) {
 }
 
 function secureCookieSuffix() {
-  return process.env.NODE_ENV === "production"
-    ? "; Secure"
-    : "";
+  const isHttpsDeployment =
+    process.env.NODE_ENV === "production" ||
+    process.env.VERCEL === "1" ||
+    Boolean(process.env.VERCEL_ENV);
+
+  return isHttpsDeployment ? "; Secure; Priority=High" : "";
 }
 
 export function createSessionCookie(session) {

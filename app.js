@@ -28,6 +28,61 @@ const PATCH_INTERVAL_MS = 600;
 const MOBILE_SCROLL_DELAY_MS = 150;
 const DOWNLOAD_ANCHOR_CLEANUP_MS = 100;
 const SAFE_THUMBNAIL_PREFIX = "data:image/jpeg;base64,";
+const TELEGRAM_USER_STORAGE_KEY = "theziess.telegram.user";
+const TELEGRAM_CONNECTED_AT_KEY = "theziess.telegram.connectedAt";
+const TELEGRAM_FALLBACK_MAX_AGE_MS = 365 * 24 * 60 * 60 * 1000;
+
+function readStoredTelegramUser() {
+    try {
+        const connectedAt = Number(localStorage.getItem(TELEGRAM_CONNECTED_AT_KEY));
+        const rawUser = localStorage.getItem(TELEGRAM_USER_STORAGE_KEY);
+
+        if (!rawUser || !Number.isFinite(connectedAt)) return null;
+
+        if (Date.now() - connectedAt > TELEGRAM_FALLBACK_MAX_AGE_MS) {
+            clearStoredTelegramUser();
+            return null;
+        }
+
+        const user = JSON.parse(rawUser);
+        if (!user || typeof user !== "object" || !String(user.id || "").trim()) {
+            clearStoredTelegramUser();
+            return null;
+        }
+
+        return {
+            id: String(user.id),
+            databaseId: String(user.databaseId || ""),
+            first_name: String(user.first_name || ""),
+            last_name: String(user.last_name || ""),
+            username: String(user.username || ""),
+            photo_url: String(user.photo_url || ""),
+        };
+    } catch (error) {
+        console.warn("Unable to read saved Telegram login", error);
+        return null;
+    }
+}
+
+function storeTelegramUser(user) {
+    if (!user) return;
+
+    try {
+        localStorage.setItem(TELEGRAM_USER_STORAGE_KEY, JSON.stringify(user));
+        localStorage.setItem(TELEGRAM_CONNECTED_AT_KEY, String(Date.now()));
+    } catch (error) {
+        console.warn("Unable to save Telegram login", error);
+    }
+}
+
+function clearStoredTelegramUser() {
+    try {
+        localStorage.removeItem(TELEGRAM_USER_STORAGE_KEY);
+        localStorage.removeItem(TELEGRAM_CONNECTED_AT_KEY);
+    } catch (error) {
+        console.warn("Unable to clear Telegram login", error);
+    }
+}
 
 
 const supportedMimeTypes = [
@@ -128,26 +183,63 @@ function requireLogin() {
     return false;
 }
 
-async function loadServerSession() {
-    try {
-        const response = await fetch("/api/auth/me", { credentials: "same-origin", cache: "no-store" });
-        if (!response.ok) throw new Error("Unable to read login session");
-        const data = await response.json();
-        currentUser = data.authenticated ? data.user : null;
-        currentSubscription = data.subscription || null;
-    } catch (error) {
-        currentUser = null;
-        currentSubscription = null;
-        console.error(error);
+async function loadServerSession({ retries = 2 } = {}) {
+    let lastError = null;
+
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+        try {
+            const response = await fetch(`/api/auth/me?t=${Date.now()}`, {
+                credentials: "include",
+                cache: "no-store",
+                headers: { Accept: "application/json" },
+            });
+
+            if (!response.ok) {
+                throw new Error(`Unable to read login session (${response.status})`);
+            }
+
+            const data = await response.json();
+
+            if (data.authenticated && data.user) {
+                currentUser = data.user;
+                currentSubscription = data.subscription || null;
+                storeTelegramUser(data.user);
+                updateAccessUI();
+                return true;
+            }
+
+            const storedUser = readStoredTelegramUser();
+            currentUser = storedUser;
+            currentSubscription = null;
+            updateAccessUI();
+            return Boolean(storedUser);
+        } catch (error) {
+            lastError = error;
+
+            if (attempt < retries) {
+                await new Promise((resolve) => setTimeout(resolve, 350 * (attempt + 1)));
+            }
+        }
     }
+
+    const storedUser = readStoredTelegramUser();
+    currentUser = storedUser;
+    currentSubscription = null;
+
+    if (lastError) {
+        console.warn("Server session unavailable; using Telegram browser fallback", lastError);
+    }
+
     updateAccessUI();
+    return Boolean(storedUser);
 }
 
 
 async function initializeMembership() {
     
-    await loadServerSession();
     const params = new URLSearchParams(location.search);
+    const returningFromTelegram = params.get("telegram_login") === "success";
+    await loadServerSession({ retries: returningFromTelegram ? 4 : 2 });
     if (params.get("telegram_login") === "success") {
         params.delete("telegram_login");
         history.replaceState({}, "", `${location.pathname}${params.toString() ? `?${params}` : ""}${location.hash}`);
@@ -197,7 +289,17 @@ async function initializeMembership() {
 
     document.getElementById("openPlansBtn")?.addEventListener("click", () => document.getElementById("subscriptionPanel")?.scrollIntoView({ behavior: "smooth" }));
     document.getElementById("logoutBtn")?.addEventListener("click", async () => {
-        await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+        try {
+            await fetch("/api/auth/logout", {
+                method: "POST",
+                credentials: "include",
+                cache: "no-store",
+            });
+        } catch (error) {
+            console.warn("Server logout failed; clearing local login anyway", error);
+        }
+
+        clearStoredTelegramUser();
         currentUser = null;
         currentSubscription = null;
         updateAccessUI();

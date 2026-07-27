@@ -25,6 +25,10 @@ if (process.env.NODE_ENV !== "production") {
   globalDatabase.__theziessPool = pool;
 }
 
+export function getPool() {
+  return pool;
+}
+
 let schemaPromise;
 
 export async function ensureSchema() {

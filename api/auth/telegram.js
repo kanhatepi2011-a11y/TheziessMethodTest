@@ -53,8 +53,10 @@ export default async function handler(req, res) {
   );
 
   const secure =
-    process.env.NODE_ENV === "production"
-      ? "; Secure"
+    process.env.NODE_ENV === "production" ||
+    process.env.VERCEL === "1" ||
+    Boolean(process.env.VERCEL_ENV)
+      ? "; Secure; Priority=High"
       : "";
 
   res.setHeader("Cache-Control", "no-store");
