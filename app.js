@@ -104,19 +104,26 @@ function updateAccessUI() {
     if (loginBtn) loginBtn.hidden = loggedIn;
     if (logoutBtn) logoutBtn.hidden = !loggedIn;
     if (subscriptionStatus) {
-        subscriptionStatus.textContent = active ? formatSubscriptionExpiry(currentSubscription) : "No active plan";
+        subscriptionStatus.textContent = active
+            ? formatSubscriptionExpiry(currentSubscription)
+            : loggedIn
+              ? "Telegram connected · Free access"
+              : "Login required";
         subscriptionStatus.classList.toggle("active", active);
+        subscriptionStatus.classList.toggle("connected", loggedIn && !active);
     }
     document.querySelectorAll(".plan-card").forEach((card) => card.classList.toggle("current", active && card.dataset.plan === currentSubscription?.planId));
-    document.body.classList.toggle("access-granted", active);
-    if (lock) lock.hidden = active;
+
+    // Telegram login now grants access immediately. A paid plan is optional
+    // and no longer controls the full-page lock or the video tools.
+    document.body.classList.toggle("access-granted", loggedIn);
+    if (lock) lock.hidden = loggedIn;
     updatePatchButton();
 }
 
-function requireSubscription() {
-    if (hasActiveSubscription()) return true;
-    if (!currentUser) openModal("telegramModal");
-    else document.getElementById("subscriptionPanel")?.scrollIntoView({ behavior: "smooth", block: "center" });
+function requireLogin() {
+    if (currentUser) return true;
+    openModal("telegramModal");
     updateAccessUI();
     return false;
 }
@@ -144,7 +151,11 @@ async function initializeMembership() {
     if (params.get("telegram_login") === "success") {
         params.delete("telegram_login");
         history.replaceState({}, "", `${location.pathname}${params.toString() ? `?${params}` : ""}${location.hash}`);
-        logMessage("Telegram account verified successfully.", "success");
+        if (currentUser) {
+            logMessage("Telegram account verified successfully. Free access unlocked.", "success");
+        } else {
+            logMessage("Telegram returned successfully, but the login session could not be loaded. Please try logging in again.", "error");
+        }
     }
     document.getElementById("telegramLoginBtn")?.addEventListener("click", () => openModal("telegramModal"));
 
@@ -223,7 +234,7 @@ async function initializeMembership() {
             button.disabled = false;
         }
     });
-    document.getElementById("lockActionBtn")?.addEventListener("click", () => currentUser ? document.getElementById("subscriptionPanel")?.scrollIntoView({ behavior: "smooth" }) : openModal("telegramModal"));
+    document.getElementById("lockActionBtn")?.addEventListener("click", () => openModal("telegramModal"));
     updateAccessUI();
 }
 
@@ -558,7 +569,7 @@ function renderFileList() {
 }
 
 async function addFiles(fileList) {
-    if (!requireSubscription()) return;
+    if (!requireLogin()) return;
     if (processingFiles || currentFlowState === "patching") return;
     processingFiles = true;
     try {
@@ -625,10 +636,10 @@ function removeFile(index) {
 }
 
 function updatePatchButton() {
-    if (!hasActiveSubscription()) {
+    if (!currentUser) {
         patchBtn.disabled = true;
         const label = patchBtn.querySelector("span");
-        if (label) label.textContent = "Subscription Required";
+        if (label) label.textContent = "Login Required";
         return;
     }
     const failedCount = selectedFiles.filter(
@@ -1288,7 +1299,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 patchBtn.addEventListener("click", async () => {
-    if (!requireSubscription()) return;
+    if (!requireLogin()) return;
     const failedItems = selectedFiles.filter((f) => f.status === "error");
     if (failedItems.length > 0) {
         for (const item of failedItems) {

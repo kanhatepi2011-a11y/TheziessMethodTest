@@ -24,3 +24,11 @@ Vercel environment variable:
 TELEGRAM_REDIRECT_URI=https://theziess-method-test-qabd.vercel.app/api/auth/telegram/callback
 
 Also add TELEGRAM_CLIENT_ID, TELEGRAM_CLIENT_SECRET, SESSION_SECRET and DATABASE_URL, then redeploy.
+
+LOGIN ACCESS FIX
+================
+- Telegram login now unlocks the compressor immediately.
+- A paid subscription is no longer required for basic video compression.
+- The full-page lock only appears while the user is logged out.
+- The patch button now says "Login Required" instead of "Subscription Required".
+- The plan section remains available as an optional/demo premium section.
