@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS subscriptions (
   id BIGSERIAL PRIMARY KEY,
-  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
   plan_id VARCHAR(20) NOT NULL CHECK (plan_id IN ('pro', 'premium', 'max')),
   status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'expired', 'cancelled')),
   starts_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 -- migrations on Vercel/Neon.
 CREATE TABLE IF NOT EXISTS free_trials (
   id BIGSERIAL PRIMARY KEY,
-  user_id BIGINT UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id TEXT UNIQUE NOT NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'active',
   starts_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '3 days'),
@@ -37,8 +37,8 @@ CREATE TABLE IF NOT EXISTS free_trials (
 
 CREATE TABLE IF NOT EXISTS payments (
   id BIGSERIAL PRIMARY KEY,
-  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  subscription_id BIGINT REFERENCES subscriptions(id) ON DELETE SET NULL,
+  user_id TEXT NOT NULL,
+  subscription_id TEXT,
   plan_id VARCHAR(20) NOT NULL CHECK (plan_id IN ('pro', 'premium', 'max')),
   amount_usd NUMERIC(10, 2) NOT NULL,
   payment_method VARCHAR(40) NOT NULL DEFAULT 'KHQR_DEMO',

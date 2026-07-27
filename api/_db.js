@@ -41,8 +41,11 @@ let schemaPromise;
  */
 export async function ensureSchema() {
   if (!schemaPromise) {
-    schemaPromise = pool
-      .query(`
+    schemaPromise = (async () => {
+      // Create the parent table first. If an older database already has this
+      // table with a different id type (BIGINT, INTEGER, UUID, or TEXT),
+      // PostgreSQL simply keeps the existing table.
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS users (
           id BIGSERIAL PRIMARY KEY,
           telegram_id BIGINT UNIQUE NOT NULL,
@@ -53,11 +56,19 @@ export async function ensureSchema() {
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           last_login_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
+        )
+      `);
 
+      // Compatibility rule: dependent user ids are TEXT and do not declare a
+      // runtime foreign key. Some existing Neon databases were created from
+      // CSV imports, where users.id became TEXT/UUID instead of BIGINT. A
+      // BIGINT foreign key against those databases raises PostgreSQL 42804.
+      // Application queries compare ids through ::TEXT, so both old and new
+      // schemas continue to work safely.
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS subscriptions (
           id BIGSERIAL PRIMARY KEY,
-          user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL,
           plan_id VARCHAR(20) NOT NULL CHECK (plan_id IN ('pro', 'premium', 'max')),
           status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'expired', 'cancelled')),
           starts_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -65,44 +76,54 @@ export async function ensureSchema() {
           payment_method VARCHAR(40) NOT NULL DEFAULT 'KHQR_DEMO',
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
+        )
+      `);
 
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS free_trials (
           id BIGSERIAL PRIMARY KEY,
-          user_id BIGINT UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          user_id TEXT UNIQUE NOT NULL,
           status VARCHAR(20) NOT NULL DEFAULT 'active',
           starts_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '3 days'),
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
+        )
+      `);
 
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS payments (
           id BIGSERIAL PRIMARY KEY,
-          user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-          subscription_id BIGINT REFERENCES subscriptions(id) ON DELETE SET NULL,
+          user_id TEXT NOT NULL,
+          subscription_id TEXT,
           plan_id VARCHAR(20) NOT NULL CHECK (plan_id IN ('pro', 'premium', 'max')),
           amount_usd NUMERIC(10, 2) NOT NULL,
           payment_method VARCHAR(40) NOT NULL DEFAULT 'KHQR_DEMO',
           status VARCHAR(20) NOT NULL DEFAULT 'demo_paid',
           transaction_reference VARCHAR(120) UNIQUE NOT NULL,
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
+        )
+      `);
 
+      await pool.query(`
         CREATE INDEX IF NOT EXISTS subscriptions_user_status_idx
-          ON subscriptions(user_id, status, expires_at DESC);
+          ON subscriptions(user_id, status, expires_at DESC)
+      `);
 
+      await pool.query(`
         CREATE INDEX IF NOT EXISTS free_trials_user_status_idx
-          ON free_trials(user_id, status, expires_at DESC);
+          ON free_trials(user_id, status, expires_at DESC)
+      `);
 
+      await pool.query(`
         CREATE INDEX IF NOT EXISTS payments_user_id_idx
-          ON payments(user_id);
-      `)
-      .catch((error) => {
-        // Let a later request retry if Neon was briefly unavailable.
-        schemaPromise = null;
-        throw error;
-      });
+          ON payments(user_id)
+      `);
+    })().catch((error) => {
+      // Let a later request retry if Neon was briefly unavailable.
+      schemaPromise = null;
+      throw error;
+    });
   }
 
   return schemaPromise;
@@ -154,7 +175,7 @@ export async function findUserById(userId) {
     `
       SELECT *
       FROM users
-      WHERE id = $1
+      WHERE id::TEXT = $1::TEXT
       LIMIT 1
     `,
     [userId],
@@ -170,7 +191,7 @@ export async function findUserByTelegramId(telegramId) {
     `
       SELECT *
       FROM users
-      WHERE telegram_id = $1
+      WHERE telegram_id::TEXT = $1::TEXT
       LIMIT 1
     `,
     [String(telegramId)],
@@ -191,7 +212,7 @@ export async function findActiveSubscription(userId) {
       FROM (
         SELECT
           id::TEXT AS id,
-          user_id,
+          user_id::TEXT AS user_id,
           plan_id::TEXT AS plan_id,
           status::TEXT AS status,
           payment_method::TEXT AS payment_method,
@@ -200,7 +221,7 @@ export async function findActiveSubscription(userId) {
           created_at,
           CASE WHEN plan_id = 'max' THEN 3 ELSE 2 END AS priority
         FROM subscriptions
-        WHERE user_id = $1
+        WHERE user_id::TEXT = $1::TEXT
           AND status = 'active'
           AND (
             plan_id = 'max'
@@ -211,7 +232,7 @@ export async function findActiveSubscription(userId) {
 
         SELECT
           ('trial-' || id::TEXT) AS id,
-          user_id,
+          user_id::TEXT AS user_id,
           'free'::TEXT AS plan_id,
           status::TEXT AS status,
           'free-trial'::TEXT AS payment_method,
@@ -220,7 +241,7 @@ export async function findActiveSubscription(userId) {
           created_at,
           1 AS priority
         FROM free_trials
-        WHERE user_id = $1
+        WHERE user_id::TEXT = $1::TEXT
           AND status = 'active'
           AND expires_at > NOW()
       ) active_access
@@ -240,13 +261,13 @@ export async function hasUsedFreeTrial(userId) {
     `
       SELECT 1
       FROM free_trials
-      WHERE user_id = $1
+      WHERE user_id::TEXT = $1::TEXT
 
       UNION ALL
 
       SELECT 1
       FROM subscriptions
-      WHERE user_id = $1
+      WHERE user_id::TEXT = $1::TEXT
         AND plan_id::TEXT = 'free'
 
       LIMIT 1
@@ -293,7 +314,7 @@ async function findStoredFreeTrial(client, userId) {
     `
       SELECT *
       FROM free_trials
-      WHERE user_id = $1
+      WHERE user_id::TEXT = $1::TEXT
       ORDER BY created_at DESC, id DESC
       LIMIT 1
     `,
@@ -308,7 +329,7 @@ async function findLegacyFreeSubscription(client, userId) {
     `
       SELECT *
       FROM subscriptions
-      WHERE user_id = $1
+      WHERE user_id::TEXT = $1::TEXT
         AND plan_id::TEXT = 'free'
       ORDER BY created_at DESC, id DESC
       LIMIT 1
@@ -347,7 +368,7 @@ async function activateFreeTrial(client, userId) {
     `
       SELECT 1
       FROM subscriptions
-      WHERE user_id = $1
+      WHERE user_id::TEXT = $1::TEXT
         AND status = 'active'
         AND (
           plan_id::TEXT = 'max'
@@ -535,7 +556,7 @@ export async function activateSubscription({
     // instances cannot race. This avoids relying on advisory-lock functions
     // that may behave differently through pooled PostgreSQL connections.
     const lockedUser = await client.query(
-      "SELECT id FROM users WHERE id = $1 FOR UPDATE",
+      "SELECT id FROM users WHERE id::TEXT = $1::TEXT FOR UPDATE",
       [userId],
     );
 
@@ -554,7 +575,7 @@ export async function activateSubscription({
           SET
             status = 'expired',
             updated_at = NOW()
-          WHERE user_id = $1
+          WHERE user_id::TEXT = $1::TEXT
             AND status = 'active'
         `,
         [userId],
