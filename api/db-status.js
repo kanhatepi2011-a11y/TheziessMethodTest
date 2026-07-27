@@ -13,23 +13,9 @@ export default async function handler(req, res) {
     const result = await getPool().query(`
       SELECT
         NOW() AS server_time,
-        to_regclass('free_trials') IS NOT NULL AS free_trials_ready,
-        (
-          SELECT data_type
-          FROM information_schema.columns
-          WHERE table_schema = current_schema()
-            AND table_name = 'users'
-            AND column_name = 'id'
-          LIMIT 1
-        ) AS users_id_type,
-        (
-          SELECT data_type
-          FROM information_schema.columns
-          WHERE table_schema = current_schema()
-            AND table_name = 'free_trials'
-            AND column_name = 'user_id'
-          LIMIT 1
-        ) AS free_trials_user_id_type
+        to_regclass('theziess_free_trials_v5') IS NOT NULL AS free_trials_ready,
+        to_regclass('theziess_subscriptions_v5') IS NOT NULL AS subscriptions_ready,
+        to_regclass('theziess_payments_v5') IS NOT NULL AS payments_ready
     `);
 
     return res.status(200).json({
@@ -37,21 +23,25 @@ export default async function handler(req, res) {
       database: "PostgreSQL",
       serverTime: result.rows[0].server_time,
       freeTrialsReady: result.rows[0].free_trials_ready,
-      usersIdType: result.rows[0].users_id_type,
-      freeTrialsUserIdType: result.rows[0].free_trials_user_id_type,
-      schemaVersion: "free-trials-v4-type-compatible",
+      subscriptionsReady: result.rows[0].subscriptions_ready,
+      paymentsReady: result.rows[0].payments_ready,
+      schemaVersion: "subscription-storage-v5-isolated",
     });
   } catch (error) {
     console.error("Database status error:", {
       message: error?.message,
       code: error?.code,
       detail: error?.detail,
+      table: error?.table,
+      column: error?.column,
     });
 
     return res.status(500).json({
       ok: false,
       error: error.message,
       detail: error?.detail || null,
+      table: error?.table || null,
+      column: error?.column || null,
       diagnosticCode: error?.code || "DATABASE_SCHEMA_FAILED",
     });
   }

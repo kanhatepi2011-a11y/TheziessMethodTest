@@ -10,9 +10,11 @@ CREATE TABLE IF NOT EXISTS users (
   last_login_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS subscriptions (
+-- Versioned tables avoid conflicts with old Neon schemas that may have
+-- missing columns or incompatible ID types.
+CREATE TABLE IF NOT EXISTS theziess_subscriptions_v5 (
   id BIGSERIAL PRIMARY KEY,
-  user_id TEXT NOT NULL,
+  user_key TEXT NOT NULL,
   plan_id VARCHAR(20) NOT NULL CHECK (plan_id IN ('pro', 'premium', 'max')),
   status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'expired', 'cancelled')),
   starts_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -22,12 +24,9 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- FREE is intentionally stored separately. This works with the original
--- paid-only subscriptions constraint and avoids risky runtime ALTER TABLE
--- migrations on Vercel/Neon.
-CREATE TABLE IF NOT EXISTS free_trials (
+CREATE TABLE IF NOT EXISTS theziess_free_trials_v5 (
   id BIGSERIAL PRIMARY KEY,
-  user_id TEXT UNIQUE NOT NULL,
+  user_key TEXT UNIQUE NOT NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'active',
   starts_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '3 days'),
@@ -35,9 +34,9 @@ CREATE TABLE IF NOT EXISTS free_trials (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS payments (
+CREATE TABLE IF NOT EXISTS theziess_payments_v5 (
   id BIGSERIAL PRIMARY KEY,
-  user_id TEXT NOT NULL,
+  user_key TEXT NOT NULL,
   subscription_id TEXT,
   plan_id VARCHAR(20) NOT NULL CHECK (plan_id IN ('pro', 'premium', 'max')),
   amount_usd NUMERIC(10, 2) NOT NULL,
@@ -47,11 +46,11 @@ CREATE TABLE IF NOT EXISTS payments (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS subscriptions_user_status_idx
-  ON subscriptions(user_id, status, expires_at DESC);
+CREATE INDEX IF NOT EXISTS theziess_subscriptions_v5_user_status_idx
+  ON theziess_subscriptions_v5(user_key, status, expires_at DESC);
 
-CREATE INDEX IF NOT EXISTS free_trials_user_status_idx
-  ON free_trials(user_id, status, expires_at DESC);
+CREATE INDEX IF NOT EXISTS theziess_free_trials_v5_user_status_idx
+  ON theziess_free_trials_v5(user_key, status, expires_at DESC);
 
-CREATE INDEX IF NOT EXISTS payments_user_id_idx
-  ON payments(user_id);
+CREATE INDEX IF NOT EXISTS theziess_payments_v5_user_key_idx
+  ON theziess_payments_v5(user_key);

@@ -29,22 +29,21 @@ export function getPool() {
   return pool;
 }
 
+const SUBSCRIPTIONS_TABLE = "theziess_subscriptions_v5";
+const FREE_TRIALS_TABLE = "theziess_free_trials_v5";
+const PAYMENTS_TABLE = "theziess_payments_v5";
+
 let schemaPromise;
 
 /**
- * Keep runtime schema setup deliberately small and idempotent.
- *
- * FREE trials are stored in their own table instead of subscriptions. Older
- * databases restrict subscriptions.plan_id to PRO/PREMIUM/MAX, and changing
- * those constraints inside a serverless request was the source of the failed
- * activation. A separate table works with both the original and newer schema.
+ * Versioned subscription tables deliberately avoid old Neon tables whose
+ * columns/types may differ. PostgreSQL 42703 means an old table is missing a
+ * column referenced by the application. Using new versioned tables makes the
+ * migration deterministic and does not delete or alter existing data.
  */
 export async function ensureSchema() {
   if (!schemaPromise) {
     schemaPromise = (async () => {
-      // Create the parent table first. If an older database already has this
-      // table with a different id type (BIGINT, INTEGER, UUID, or TEXT),
-      // PostgreSQL simply keeps the existing table.
       await pool.query(`
         CREATE TABLE IF NOT EXISTS users (
           id BIGSERIAL PRIMARY KEY,
@@ -59,16 +58,10 @@ export async function ensureSchema() {
         )
       `);
 
-      // Compatibility rule: dependent user ids are TEXT and do not declare a
-      // runtime foreign key. Some existing Neon databases were created from
-      // CSV imports, where users.id became TEXT/UUID instead of BIGINT. A
-      // BIGINT foreign key against those databases raises PostgreSQL 42804.
-      // Application queries compare ids through ::TEXT, so both old and new
-      // schemas continue to work safely.
       await pool.query(`
-        CREATE TABLE IF NOT EXISTS subscriptions (
+        CREATE TABLE IF NOT EXISTS ${SUBSCRIPTIONS_TABLE} (
           id BIGSERIAL PRIMARY KEY,
-          user_id TEXT NOT NULL,
+          user_key TEXT NOT NULL,
           plan_id VARCHAR(20) NOT NULL CHECK (plan_id IN ('pro', 'premium', 'max')),
           status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'expired', 'cancelled')),
           starts_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -80,9 +73,9 @@ export async function ensureSchema() {
       `);
 
       await pool.query(`
-        CREATE TABLE IF NOT EXISTS free_trials (
+        CREATE TABLE IF NOT EXISTS ${FREE_TRIALS_TABLE} (
           id BIGSERIAL PRIMARY KEY,
-          user_id TEXT UNIQUE NOT NULL,
+          user_key TEXT UNIQUE NOT NULL,
           status VARCHAR(20) NOT NULL DEFAULT 'active',
           starts_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '3 days'),
@@ -92,9 +85,9 @@ export async function ensureSchema() {
       `);
 
       await pool.query(`
-        CREATE TABLE IF NOT EXISTS payments (
+        CREATE TABLE IF NOT EXISTS ${PAYMENTS_TABLE} (
           id BIGSERIAL PRIMARY KEY,
-          user_id TEXT NOT NULL,
+          user_key TEXT NOT NULL,
           subscription_id TEXT,
           plan_id VARCHAR(20) NOT NULL CHECK (plan_id IN ('pro', 'premium', 'max')),
           amount_usd NUMERIC(10, 2) NOT NULL,
@@ -106,21 +99,20 @@ export async function ensureSchema() {
       `);
 
       await pool.query(`
-        CREATE INDEX IF NOT EXISTS subscriptions_user_status_idx
-          ON subscriptions(user_id, status, expires_at DESC)
+        CREATE INDEX IF NOT EXISTS theziess_subscriptions_v5_user_status_idx
+          ON ${SUBSCRIPTIONS_TABLE}(user_key, status, expires_at DESC)
       `);
 
       await pool.query(`
-        CREATE INDEX IF NOT EXISTS free_trials_user_status_idx
-          ON free_trials(user_id, status, expires_at DESC)
+        CREATE INDEX IF NOT EXISTS theziess_free_trials_v5_user_status_idx
+          ON ${FREE_TRIALS_TABLE}(user_key, status, expires_at DESC)
       `);
 
       await pool.query(`
-        CREATE INDEX IF NOT EXISTS payments_user_id_idx
-          ON payments(user_id)
+        CREATE INDEX IF NOT EXISTS theziess_payments_v5_user_key_idx
+          ON ${PAYMENTS_TABLE}(user_key)
       `);
     })().catch((error) => {
-      // Let a later request retry if Neon was briefly unavailable.
       schemaPromise = null;
       throw error;
     });
@@ -144,7 +136,6 @@ export async function upsertTelegramUser(telegramUser) {
         updated_at
       )
       VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-
       ON CONFLICT (telegram_id)
       DO UPDATE SET
         username = EXCLUDED.username,
@@ -153,7 +144,6 @@ export async function upsertTelegramUser(telegramUser) {
         photo_url = EXCLUDED.photo_url,
         last_login_at = NOW(),
         updated_at = NOW()
-
       RETURNING *
     `,
     [
@@ -203,16 +193,13 @@ export async function findUserByTelegramId(telegramId) {
 export async function findActiveSubscription(userId) {
   await ensureSchema();
 
-  // Read paid subscriptions from the original table and FREE access from the
-  // dedicated free_trials table. The legacy branch also recognizes a FREE row
-  // created by an earlier deployment, so existing users are not locked out.
   const result = await pool.query(
     `
       SELECT *
       FROM (
         SELECT
           id::TEXT AS id,
-          user_id::TEXT AS user_id,
+          user_key AS user_id,
           plan_id::TEXT AS plan_id,
           status::TEXT AS status,
           payment_method::TEXT AS payment_method,
@@ -220,19 +207,16 @@ export async function findActiveSubscription(userId) {
           expires_at,
           created_at,
           CASE WHEN plan_id = 'max' THEN 3 ELSE 2 END AS priority
-        FROM subscriptions
-        WHERE user_id::TEXT = $1::TEXT
+        FROM ${SUBSCRIPTIONS_TABLE}
+        WHERE user_key = $1::TEXT
           AND status = 'active'
-          AND (
-            plan_id = 'max'
-            OR expires_at > NOW()
-          )
+          AND (plan_id = 'max' OR expires_at > NOW())
 
         UNION ALL
 
         SELECT
           ('trial-' || id::TEXT) AS id,
-          user_id::TEXT AS user_id,
+          user_key AS user_id,
           'free'::TEXT AS plan_id,
           status::TEXT AS status,
           'free-trial'::TEXT AS payment_method,
@@ -240,15 +224,15 @@ export async function findActiveSubscription(userId) {
           expires_at,
           created_at,
           1 AS priority
-        FROM free_trials
-        WHERE user_id::TEXT = $1::TEXT
+        FROM ${FREE_TRIALS_TABLE}
+        WHERE user_key = $1::TEXT
           AND status = 'active'
           AND expires_at > NOW()
       ) active_access
       ORDER BY priority DESC, created_at DESC
       LIMIT 1
     `,
-    [userId],
+    [String(userId)],
   );
 
   return result.rows[0] || null;
@@ -260,19 +244,11 @@ export async function hasUsedFreeTrial(userId) {
   const result = await pool.query(
     `
       SELECT 1
-      FROM free_trials
-      WHERE user_id::TEXT = $1::TEXT
-
-      UNION ALL
-
-      SELECT 1
-      FROM subscriptions
-      WHERE user_id::TEXT = $1::TEXT
-        AND plan_id::TEXT = 'free'
-
+      FROM ${FREE_TRIALS_TABLE}
+      WHERE user_key = $1::TEXT
       LIMIT 1
     `,
-    [userId],
+    [String(userId)],
   );
 
   return Boolean(result.rows[0]);
@@ -281,7 +257,7 @@ export async function hasUsedFreeTrial(userId) {
 function toFreeTrialSubscription(trial) {
   return {
     id: `trial-${trial.id}`,
-    user_id: trial.user_id,
+    user_id: trial.user_key,
     plan_id: "free",
     status: trial.status,
     payment_method: "free-trial",
@@ -313,70 +289,38 @@ async function findStoredFreeTrial(client, userId) {
   const result = await client.query(
     `
       SELECT *
-      FROM free_trials
-      WHERE user_id::TEXT = $1::TEXT
+      FROM ${FREE_TRIALS_TABLE}
+      WHERE user_key = $1::TEXT
       ORDER BY created_at DESC, id DESC
       LIMIT 1
     `,
-    [userId],
-  );
-
-  return result.rows[0] || null;
-}
-
-async function findLegacyFreeSubscription(client, userId) {
-  const result = await client.query(
-    `
-      SELECT *
-      FROM subscriptions
-      WHERE user_id::TEXT = $1::TEXT
-        AND plan_id::TEXT = 'free'
-      ORDER BY created_at DESC, id DESC
-      LIMIT 1
-    `,
-    [userId],
+    [String(userId)],
   );
 
   return result.rows[0] || null;
 }
 
 async function activateFreeTrial(client, userId) {
-  // Make this endpoint idempotent. If the database activation succeeded but
-  // the browser lost the response, clicking the button again must restore the
-  // same active trial instead of permanently returning "already used".
   const storedTrial = await findStoredFreeTrial(client, userId);
 
   if (isActiveTrialRow(storedTrial)) {
     return toFreeTrialSubscription(storedTrial);
   }
 
-  const legacyTrial = await findLegacyFreeSubscription(client, userId);
-
-  if (isActiveTrialRow(legacyTrial)) {
-    return {
-      ...legacyTrial,
-      plan_id: "free",
-      payment_method: legacyTrial.payment_method || "free-trial",
-    };
-  }
-
-  if (storedTrial || legacyTrial) {
+  if (storedTrial) {
     throw freeTrialUsedError();
   }
 
   const activePaidResult = await client.query(
     `
       SELECT 1
-      FROM subscriptions
-      WHERE user_id::TEXT = $1::TEXT
+      FROM ${SUBSCRIPTIONS_TABLE}
+      WHERE user_key = $1::TEXT
         AND status = 'active'
-        AND (
-          plan_id::TEXT = 'max'
-          OR expires_at > NOW()
-        )
+        AND (plan_id = 'max' OR expires_at > NOW())
       LIMIT 1
     `,
-    [userId],
+    [String(userId)],
   );
 
   if (activePaidResult.rows[0]) {
@@ -390,20 +334,17 @@ async function activateFreeTrial(client, userId) {
   await client.query("SAVEPOINT free_trial_insert");
 
   try {
-    // Do not depend on ON CONFLICT(user_id). Some older Neon databases have a
-    // free_trials table created before the unique constraint was added. The
-    // users row lock in activateSubscription serializes requests safely.
     const result = await client.query(
       `
-        INSERT INTO free_trials (
-          user_id,
+        INSERT INTO ${FREE_TRIALS_TABLE} (
+          user_key,
           status,
           starts_at,
           expires_at,
           updated_at
         )
         VALUES (
-          $1,
+          $1::TEXT,
           'active',
           NOW(),
           NOW() + INTERVAL '3 days',
@@ -411,19 +352,14 @@ async function activateFreeTrial(client, userId) {
         )
         RETURNING *
       `,
-      [userId],
+      [String(userId)],
     );
 
     await client.query("RELEASE SAVEPOINT free_trial_insert");
     return toFreeTrialSubscription(result.rows[0]);
   } catch (error) {
-    // A constraint violation aborts the current PostgreSQL statement. Restore
-    // the transaction to the savepoint before attempting the recovery read.
     await client.query("ROLLBACK TO SAVEPOINT free_trial_insert");
 
-    // A concurrent request or an older unique index may have inserted the row
-    // first. Re-read it and return the active access instead of showing an
-    // activation error.
     if (error?.code === "23505") {
       const concurrentTrial = await findStoredFreeTrial(client, userId);
 
@@ -447,69 +383,28 @@ async function recordPaidDemoPayment({
 }) {
   const reference = `DEMO-${Date.now()}-${subscriptionId}`;
 
-  // Support both the original amount_usd schema and the newer amount schema.
-  const columnsResult = await pool.query(
+  await pool.query(
     `
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_schema = current_schema()
-        AND table_name = 'payments'
+      INSERT INTO ${PAYMENTS_TABLE} (
+        user_key,
+        subscription_id,
+        plan_id,
+        amount_usd,
+        payment_method,
+        status,
+        transaction_reference
+      )
+      VALUES ($1::TEXT, $2::TEXT, $3, $4, $5, 'demo_paid', $6)
     `,
+    [
+      String(userId),
+      String(subscriptionId),
+      planId,
+      amount,
+      paymentMethod,
+      reference,
+    ],
   );
-
-  const columns = new Set(columnsResult.rows.map((row) => row.column_name));
-
-  if (columns.has("amount_usd")) {
-    await pool.query(
-      `
-        INSERT INTO payments (
-          user_id,
-          subscription_id,
-          plan_id,
-          amount_usd,
-          payment_method,
-          status,
-          transaction_reference
-        )
-        VALUES ($1, $2, $3, $4, $5, 'demo_paid', $6)
-      `,
-      [
-        userId,
-        subscriptionId,
-        planId,
-        amount,
-        paymentMethod,
-        reference,
-      ],
-    );
-    return;
-  }
-
-  if (columns.has("amount")) {
-    await pool.query(
-      `
-        INSERT INTO payments (
-          user_id,
-          subscription_id,
-          plan_id,
-          amount,
-          currency,
-          payment_method,
-          status,
-          transaction_reference
-        )
-        VALUES ($1, $2, $3, $4, 'USD', $5, 'completed', $6)
-      `,
-      [
-        userId,
-        subscriptionId,
-        planId,
-        amount,
-        paymentMethod,
-        reference,
-      ],
-    );
-  }
 }
 
 export async function activateSubscription({
@@ -520,22 +415,10 @@ export async function activateSubscription({
   await ensureSchema();
 
   const plans = {
-    free: {
-      amount: 0,
-      days: 3,
-    },
-    pro: {
-      amount: 2,
-      days: 30,
-    },
-    premium: {
-      amount: 5,
-      days: 120,
-    },
-    max: {
-      amount: 10,
-      days: null,
-    },
+    free: { amount: 0, days: 3 },
+    pro: { amount: 2, days: 30 },
+    premium: { amount: 5, days: 120 },
+    max: { amount: 10, days: null },
   };
 
   const selectedPlan = plans[planId];
@@ -552,16 +435,15 @@ export async function activateSubscription({
   try {
     await client.query("BEGIN");
 
-    // Lock the existing user row so repeated clicks and multiple Vercel
-    // instances cannot race. This avoids relying on advisory-lock functions
-    // that may behave differently through pooled PostgreSQL connections.
     const lockedUser = await client.query(
       "SELECT id FROM users WHERE id::TEXT = $1::TEXT FOR UPDATE",
-      [userId],
+      [String(userId)],
     );
 
     if (!lockedUser.rows[0]) {
-      const error = new Error("Telegram account was not found. Please log in again.");
+      const error = new Error(
+        "Telegram account was not found. Please log in again.",
+      );
       error.code = "USER_NOT_FOUND";
       throw error;
     }
@@ -571,20 +453,18 @@ export async function activateSubscription({
     } else {
       await client.query(
         `
-          UPDATE subscriptions
-          SET
-            status = 'expired',
-            updated_at = NOW()
-          WHERE user_id::TEXT = $1::TEXT
+          UPDATE ${SUBSCRIPTIONS_TABLE}
+          SET status = 'expired', updated_at = NOW()
+          WHERE user_key = $1::TEXT
             AND status = 'active'
         `,
-        [userId],
+        [String(userId)],
       );
 
       const subscriptionResult = await client.query(
         `
-          INSERT INTO subscriptions (
-            user_id,
+          INSERT INTO ${SUBSCRIPTIONS_TABLE} (
+            user_key,
             plan_id,
             status,
             payment_method,
@@ -593,28 +473,31 @@ export async function activateSubscription({
             updated_at
           )
           VALUES (
-            $1,
+            $1::TEXT,
             $2,
             'active',
             $3,
             NOW(),
             CASE
               WHEN $4::INTEGER IS NULL THEN NULL
-              ELSE NOW() + ($4 * INTERVAL '1 day')
+              ELSE NOW() + ($4::INTEGER * INTERVAL '1 day')
             END,
             NOW()
           )
           RETURNING *
         `,
         [
-          userId,
+          String(userId),
           planId,
           paymentMethod,
           selectedPlan.days,
         ],
       );
 
-      subscription = subscriptionResult.rows[0];
+      subscription = {
+        ...subscriptionResult.rows[0],
+        user_id: subscriptionResult.rows[0].user_key,
+      };
     }
 
     await client.query("COMMIT");
@@ -625,7 +508,6 @@ export async function activateSubscription({
     client.release();
   }
 
-  // Payment history must never roll back an already activated paid plan.
   if (planId !== "free") {
     try {
       await recordPaidDemoPayment({
