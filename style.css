@@ -1996,3 +1996,475 @@ body::before {
     font-size: 12px;
   }
 }
+
+/* =========================================================
+   FIXED 3-BUTTON APP NAVIGATION + TELEGRAM PROFILE
+   ========================================================= */
+body {
+  padding-bottom: calc(112px + env(safe-area-inset-bottom, 0px));
+}
+
+.app-bottom-nav {
+  position: fixed;
+  left: 50%;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 850;
+  width: min(calc(100% - 28px), 540px);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid rgba(216, 180, 254, 0.24);
+  border-radius: 22px;
+  background: rgba(12, 6, 23, 0.9);
+  box-shadow:
+    0 18px 55px rgba(0, 0, 0, 0.55),
+    0 0 30px rgba(124, 58, 237, 0.16);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+}
+
+.app-nav-button {
+  position: relative;
+  min-width: 0;
+  min-height: 58px;
+  padding: 8px 7px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background: transparent;
+  color: #9f93b1;
+  font-family: "Noto Sans Khmer", system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-nav-button i {
+  font-size: 21px;
+  line-height: 1;
+}
+
+.app-nav-button:hover {
+  color: #eee7f8;
+  background: rgba(168, 85, 247, 0.08);
+}
+
+.app-nav-button:active {
+  transform: scale(0.96);
+}
+
+.app-nav-button.active {
+  color: #ffffff;
+  border-color: rgba(216, 180, 254, 0.25);
+  background: linear-gradient(135deg, #7c3aed 0%, #a855f7 55%, #22d3ee 140%);
+  box-shadow: 0 9px 24px rgba(124, 58, 237, 0.3);
+}
+
+.app-nav-count {
+  position: absolute;
+  top: 5px;
+  right: calc(50% - 29px);
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border: 2px solid #10091c;
+  border-radius: 999px;
+  background: #ec4899;
+  color: #ffffff;
+  font: 800 9px/13px "JetBrains Mono", monospace;
+  text-align: center;
+}
+
+.app-nav-online-dot {
+  position: absolute;
+  top: 8px;
+  right: calc(50% - 22px);
+  width: 9px;
+  height: 9px;
+  border: 2px solid #10091c;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 10px rgba(52, 211, 153, 0.75);
+}
+
+.history-container.nav-highlight,
+.drop-zone.nav-highlight {
+  animation: navigationFocusPulse 900ms ease;
+}
+
+@keyframes navigationFocusPulse {
+  0%, 100% { box-shadow: none; }
+  45% { box-shadow: 0 0 0 3px rgba(192, 132, 252, 0.28), 0 0 34px rgba(124, 58, 237, 0.28); }
+}
+
+/* Header Telegram account summary */
+.header-account-area {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.header-login-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 13px;
+  border: 1px solid rgba(216, 180, 254, 0.2);
+  border-radius: 11px;
+  background: linear-gradient(135deg, #229ed9, #7c3aed);
+  color: #ffffff;
+  font: 750 11px "Noto Sans Khmer", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.telegram-account-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 310px;
+  padding: 8px 10px;
+  border: 1px solid rgba(216, 180, 254, 0.16);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.035);
+  text-align: left;
+}
+
+.telegram-account-photo {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(56, 189, 248, 0.55);
+}
+
+.telegram-account-details {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.telegram-account-details strong,
+.telegram-account-details span,
+.telegram-account-details small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.telegram-account-details strong { font-size: 12px; }
+.telegram-account-details span { color: #7dd3fc; font-size: 10px; }
+.telegram-account-details small { color: #a99db7; font-size: 9px; margin-top: 2px; }
+
+.telegram-account-logout {
+  width: 30px;
+  height: 30px;
+  margin-left: auto;
+  border: 0;
+  border-radius: 9px;
+  background: rgba(244, 63, 94, 0.12);
+  color: #fda4af;
+  cursor: pointer;
+}
+
+/* Profile modal */
+.profile-modal-card {
+  width: min(500px, calc(100vw - 28px));
+  max-height: min(760px, calc(100vh - 36px));
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-modal-body {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.profile-hero-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(216, 180, 254, 0.16);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.16), rgba(34, 211, 238, 0.06));
+}
+
+.profile-avatar-shell {
+  position: relative;
+  width: 68px;
+  height: 68px;
+  flex: 0 0 68px;
+  border-radius: 22px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #7c3aed, #c084fc 58%, #22d3ee);
+  box-shadow: 0 12px 28px rgba(124, 58, 237, 0.28);
+  overflow: visible;
+}
+
+.profile-avatar-image,
+.profile-avatar-initials {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.profile-avatar-image {
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.34);
+}
+
+.profile-avatar-initials {
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.profile-connected-indicator {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 17px;
+  height: 17px;
+  border: 3px solid #10091c;
+  border-radius: 50%;
+  background: #34d399;
+}
+
+.profile-identity {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.profile-identity strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 18px;
+}
+
+.profile-identity > span {
+  color: #7dd3fc;
+  font-size: 12px;
+}
+
+.profile-connection-badge {
+  width: fit-content;
+  margin-top: 5px;
+  padding: 5px 8px;
+  border: 1px solid rgba(52, 211, 153, 0.25);
+  border-radius: 999px;
+  background: rgba(52, 211, 153, 0.1);
+  color: #6ee7b7;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.profile-connection-badge.offline {
+  border-color: rgba(244, 63, 94, 0.25);
+  background: rgba(244, 63, 94, 0.1);
+  color: #fda4af;
+}
+
+.profile-information-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.profile-information-item {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid rgba(216, 180, 254, 0.14);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.025);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.profile-information-item span,
+.profile-subscription-details span {
+  color: #978aa8;
+  font-size: 10px;
+}
+
+.profile-information-item strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #f3eff8;
+  font: 750 12px "JetBrains Mono", monospace;
+}
+
+.profile-subscription-card {
+  padding: 16px;
+  border: 1px solid rgba(216, 180, 254, 0.18);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(35, 16, 62, 0.9), rgba(13, 7, 25, 0.92));
+}
+
+.profile-subscription-heading,
+.profile-subscription-details {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.profile-subscription-heading > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.profile-subscription-heading > div > span {
+  color: #c084fc;
+  font: 700 9px "JetBrains Mono", monospace;
+  letter-spacing: 0.13em;
+}
+
+.profile-subscription-heading strong {
+  font-size: 23px;
+}
+
+.profile-plan-badge {
+  align-self: flex-start;
+  padding: 6px 9px;
+  border: 1px solid rgba(56, 189, 248, 0.26);
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.1);
+  color: #7dd3fc;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.profile-plan-badge.premium {
+  border-color: rgba(52, 211, 153, 0.28);
+  background: rgba(52, 211, 153, 0.1);
+  color: #6ee7b7;
+}
+
+.profile-subscription-details {
+  margin-top: 14px;
+}
+
+.profile-subscription-details > div {
+  flex: 1;
+  padding: 10px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.035);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-subscription-details strong {
+  font-size: 11px;
+}
+
+.profile-subscription-card p {
+  margin-top: 12px;
+  color: #a99db7;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.profile-modal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 12px;
+}
+
+.profile-modal-actions .modal-btn {
+  min-height: 46px;
+  border: 1px solid rgba(216, 180, 254, 0.16);
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-weight: 800;
+}
+
+.profile-login-button {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, #229ed9, #7c3aed);
+  color: #ffffff;
+}
+
+.profile-plans-button {
+  background: rgba(168, 85, 247, 0.14);
+  color: #e9d5ff;
+}
+
+.profile-logout-button {
+  background: rgba(244, 63, 94, 0.12);
+  color: #fda4af;
+}
+
+#changelogContainer {
+  bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+}
+
+@media (max-width: 700px) {
+  .app-bottom-nav {
+    width: calc(100% - 24px);
+    bottom: max(10px, env(safe-area-inset-bottom));
+    border-radius: 19px;
+  }
+
+  .app-nav-button {
+    min-height: 55px;
+    font-size: 10px;
+  }
+
+  .app-nav-button i { font-size: 20px; }
+
+  .profile-information-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-hero-card {
+    align-items: flex-start;
+  }
+
+  .profile-modal-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-login-button {
+    grid-column: auto;
+  }
+
+  #changelogContainer {
+    right: 8px;
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+[hidden] {
+  display: none !important;
+}

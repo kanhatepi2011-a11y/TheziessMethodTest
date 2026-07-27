@@ -518,6 +518,47 @@
     </main>
   </div>
 
+
+  <!-- Primary app navigation -->
+  <nav
+    class="app-bottom-nav"
+    id="appBottomNav"
+    aria-label="Main application navigation"
+  >
+    <button
+      type="button"
+      class="app-nav-button active"
+      id="navCompressBtn"
+      data-view="compress"
+      aria-current="page"
+    >
+      <i class="ri-compress-line" aria-hidden="true"></i>
+      <span>Compress</span>
+    </button>
+
+    <button
+      type="button"
+      class="app-nav-button"
+      id="navHistoryBtn"
+      data-view="history"
+    >
+      <i class="ri-history-line" aria-hidden="true"></i>
+      <span>History</span>
+      <span class="app-nav-count" id="navHistoryCount" hidden>0</span>
+    </button>
+
+    <button
+      type="button"
+      class="app-nav-button"
+      id="navProfileBtn"
+      data-view="profile"
+    >
+      <i class="ri-user-3-line" aria-hidden="true"></i>
+      <span>Profile</span>
+      <span class="app-nav-online-dot" id="navProfileDot" hidden></span>
+    </button>
+  </nav>
+
   <footer class="footer">
     TheZiess Method · ឧបករណ៍កែគុណភាពវីដេអូ NoBlur
 
@@ -804,6 +845,125 @@
     </div>
   </div>
 
+
+  <!-- Telegram profile and subscription modal -->
+  <div
+    class="modal-overlay"
+    id="profileModal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="profileModalTitle"
+  >
+    <div class="modal-card profile-modal-card">
+      <div class="modal-header">
+        <div class="modal-header-left">
+          <i class="ri-user-3-fill" aria-hidden="true"></i>
+          <span class="modal-title" id="profileModalTitle">
+            Telegram Profile
+          </span>
+        </div>
+
+        <button
+          type="button"
+          class="modal-close-btn"
+          data-close-modal="profileModal"
+          aria-label="Close profile"
+        >
+          <i class="ri-close-fill" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <div class="modal-body profile-modal-body">
+        <section class="profile-hero-card">
+          <div class="profile-avatar-shell">
+            <img
+              class="profile-avatar-image"
+              id="profileAvatar"
+              alt="Telegram profile photo"
+              hidden
+            >
+            <span class="profile-avatar-initials" id="profileInitials">T</span>
+            <span class="profile-connected-indicator" aria-hidden="true"></span>
+          </div>
+
+          <div class="profile-identity">
+            <strong id="profileName">Telegram User</strong>
+            <span id="profileUsername">Not connected</span>
+            <small class="profile-connection-badge" id="profileConnectionStatus">
+              Telegram not connected
+            </small>
+          </div>
+        </section>
+
+        <section class="profile-information-grid" aria-label="Telegram account details">
+          <div class="profile-information-item">
+            <span>Telegram ID</span>
+            <strong id="profileTelegramId">—</strong>
+          </div>
+
+          <div class="profile-information-item">
+            <span>Account access</span>
+            <strong id="profileAccessLevel">Login required</strong>
+          </div>
+        </section>
+
+        <section class="profile-subscription-card">
+          <div class="profile-subscription-heading">
+            <div>
+              <span>SUBSCRIPTION</span>
+              <strong id="profilePlanName">FREE</strong>
+            </div>
+            <span class="profile-plan-badge" id="profilePlanBadge">Free access</span>
+          </div>
+
+          <div class="profile-subscription-details">
+            <div>
+              <span>Status</span>
+              <strong id="profilePlanStatus">Active</strong>
+            </div>
+            <div>
+              <span>Expires</span>
+              <strong id="profilePlanExpiry">No expiry</strong>
+            </div>
+          </div>
+
+          <p id="profilePlanDescription">
+            Telegram login gives you access to the video compressor. Paid plans are optional.
+          </p>
+        </section>
+      </div>
+
+      <div class="modal-actions profile-modal-actions">
+        <button
+          type="button"
+          class="modal-btn profile-login-button"
+          id="profileLoginBtn"
+        >
+          <i class="ri-telegram-2-fill" aria-hidden="true"></i>
+          Login with Telegram
+        </button>
+
+        <button
+          type="button"
+          class="modal-btn profile-plans-button"
+          id="profilePlansBtn"
+        >
+          <i class="ri-vip-crown-2-line" aria-hidden="true"></i>
+          View Plans
+        </button>
+
+        <button
+          type="button"
+          class="modal-btn profile-logout-button"
+          id="profileLogoutBtn"
+        >
+          <i class="ri-logout-box-r-line" aria-hidden="true"></i>
+          Logout
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Demo payment modal -->
   <div
     class="modal-overlay"
@@ -949,7 +1109,7 @@
 
   <script
     type="module"
-    src="app.js?v=20260727-session-fix"
+    src="app.js?v=20260727-bottom-nav-profile"
   ></script>
 </body>
 </html>

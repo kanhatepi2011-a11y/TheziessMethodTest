@@ -144,6 +144,141 @@ function formatSubscriptionExpiry(subscription) {
     return `${PLANS[subscription.planId]?.name || "PLAN"} · until ${new Date(subscription.expiresAt).toLocaleDateString()}`;
 }
 
+function getTelegramDisplayName(user) {
+    if (!user) return "Telegram User";
+    const fullName = [user.first_name, user.last_name]
+        .map((part) => String(part || "").trim())
+        .filter(Boolean)
+        .join(" ");
+    return fullName || user.username || "Telegram User";
+}
+
+function getTelegramInitials(user) {
+    const displayName = getTelegramDisplayName(user);
+    const initials = displayName
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part.charAt(0).toUpperCase())
+        .join("");
+    return initials || "T";
+}
+
+function setElementText(id, value) {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value;
+}
+
+function updateTelegramProfileUI(loggedIn, active) {
+    const displayName = getTelegramDisplayName(currentUser);
+    const username = currentUser?.username
+        ? `@${currentUser.username}`
+        : loggedIn
+          ? "No public username"
+          : "Not connected";
+    const photoUrl = String(currentUser?.photo_url || "").trim();
+    const plan = active ? PLANS[currentSubscription?.planId] : null;
+
+    const accountCard = document.getElementById("telegramAccountCard");
+    const accountPhoto = document.getElementById("telegramAccountPhoto");
+    const profileAvatar = document.getElementById("profileAvatar");
+    const profileInitials = document.getElementById("profileInitials");
+    const profileConnectionStatus = document.getElementById("profileConnectionStatus");
+    const profilePlanBadge = document.getElementById("profilePlanBadge");
+    const profileConnectedIndicator = document.querySelector(".profile-connected-indicator");
+    const navProfileDot = document.getElementById("navProfileDot");
+
+    if (accountCard) accountCard.hidden = !loggedIn;
+    setElementText("telegramAccountName", displayName);
+    setElementText("telegramAccountUsername", username);
+    setElementText(
+        "telegramAccountPlan",
+        active ? formatSubscriptionExpiry(currentSubscription) : "Free access",
+    );
+
+    const configurePhoto = (image, initialsElement = null) => {
+        if (!image) return;
+        if (loggedIn && photoUrl) {
+            image.src = photoUrl;
+            image.hidden = false;
+            if (initialsElement) initialsElement.hidden = true;
+            image.onerror = () => {
+                image.hidden = true;
+                image.removeAttribute("src");
+                if (initialsElement) initialsElement.hidden = false;
+            };
+        } else {
+            image.hidden = true;
+            image.removeAttribute("src");
+            if (initialsElement) initialsElement.hidden = false;
+        }
+    };
+
+    configurePhoto(accountPhoto);
+    configurePhoto(profileAvatar, profileInitials);
+
+    if (profileInitials) {
+        profileInitials.textContent = getTelegramInitials(currentUser);
+        profileInitials.hidden = loggedIn && Boolean(photoUrl);
+    }
+
+    setElementText("profileName", loggedIn ? displayName : "Telegram User");
+    setElementText("profileUsername", username);
+    setElementText("profileTelegramId", loggedIn ? String(currentUser.id || "—") : "—");
+    setElementText("profileAccessLevel", loggedIn ? "Compressor unlocked" : "Login required");
+    setElementText("profileConnectionStatus", loggedIn ? "Telegram connected" : "Telegram not connected");
+
+    if (profileConnectionStatus) {
+        profileConnectionStatus.classList.toggle("offline", !loggedIn);
+    }
+    if (profileConnectedIndicator) profileConnectedIndicator.hidden = !loggedIn;
+    if (navProfileDot) navProfileDot.hidden = !loggedIn;
+
+    if (active && plan) {
+        setElementText("profilePlanName", plan.name);
+        setElementText("profilePlanBadge", "Premium active");
+        setElementText("profilePlanStatus", "Active");
+        setElementText(
+            "profilePlanExpiry",
+            currentSubscription.planId === "max"
+                ? "Unlimited"
+                : new Date(currentSubscription.expiresAt).toLocaleDateString(),
+        );
+        setElementText(
+            "profilePlanDescription",
+            `${plan.name} is active. Payment method: ${currentSubscription.paymentMethod || "KHQR"}.`,
+        );
+        profilePlanBadge?.classList.add("premium");
+    } else if (loggedIn) {
+        setElementText("profilePlanName", "FREE");
+        setElementText("profilePlanBadge", "Free access");
+        setElementText("profilePlanStatus", "Active");
+        setElementText("profilePlanExpiry", "No expiry");
+        setElementText(
+            "profilePlanDescription",
+            "Telegram login gives you access to the video compressor. Paid plans are optional.",
+        );
+        profilePlanBadge?.classList.remove("premium");
+    } else {
+        setElementText("profilePlanName", "NOT CONNECTED");
+        setElementText("profilePlanBadge", "Login required");
+        setElementText("profilePlanStatus", "Inactive");
+        setElementText("profilePlanExpiry", "—");
+        setElementText(
+            "profilePlanDescription",
+            "Connect your Telegram account to unlock the video compressor and view subscription details.",
+        );
+        profilePlanBadge?.classList.remove("premium");
+    }
+
+    const profileLoginBtn = document.getElementById("profileLoginBtn");
+    const profilePlansBtn = document.getElementById("profilePlansBtn");
+    const profileLogoutBtn = document.getElementById("profileLogoutBtn");
+    if (profileLoginBtn) profileLoginBtn.hidden = loggedIn;
+    if (profilePlansBtn) profilePlansBtn.hidden = !loggedIn;
+    if (profileLogoutBtn) profileLogoutBtn.hidden = !loggedIn;
+}
+
 function openModal(id) { document.getElementById(id)?.classList.add("active"); }
 function closeModal(id) { document.getElementById(id)?.classList.remove("active"); }
 
@@ -173,6 +308,7 @@ function updateAccessUI() {
     // and no longer controls the full-page lock or the video tools.
     document.body.classList.toggle("access-granted", loggedIn);
     if (lock) lock.hidden = loggedIn;
+    updateTelegramProfileUI(loggedIn, active);
     updatePatchButton();
 }
 
@@ -363,9 +499,86 @@ function adjustMobileLayout() {
     }
 }
 
+function setActiveNavigation(view) {
+    document.querySelectorAll(".app-nav-button").forEach((button) => {
+        const isActive = button.dataset.view === view;
+        button.classList.toggle("active", isActive);
+        if (isActive) {
+            button.setAttribute("aria-current", "page");
+        } else {
+            button.removeAttribute("aria-current");
+        }
+    });
+}
+
+function focusNavigationSection(element) {
+    if (!element) return;
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+    element.classList.remove("nav-highlight");
+    requestAnimationFrame(() => {
+        element.classList.add("nav-highlight");
+        window.setTimeout(() => element.classList.remove("nav-highlight"), 950);
+    });
+}
+
+function initializeBottomNavigation() {
+    const compressButton = document.getElementById("navCompressBtn");
+    const historyButton = document.getElementById("navHistoryBtn");
+    const profileButton = document.getElementById("navProfileBtn");
+    const profileModal = document.getElementById("profileModal");
+
+    compressButton?.addEventListener("click", () => {
+        if (!requireLogin()) return;
+        setActiveNavigation("compress");
+        focusNavigationSection(dropZone);
+    });
+
+    historyButton?.addEventListener("click", async () => {
+        if (!requireLogin()) return;
+        await renderHistoryList();
+        const historyContainer = historyHeader?.parentElement;
+        historyContainer?.classList.remove("collapsed");
+        document.getElementById("historyToggleBtn")?.setAttribute("aria-expanded", "true");
+        setActiveNavigation("history");
+        focusNavigationSection(historyContainer);
+    });
+
+    profileButton?.addEventListener("click", () => {
+        updateAccessUI();
+        setActiveNavigation("profile");
+        openModal("profileModal");
+    });
+
+    document.getElementById("profileLoginBtn")?.addEventListener("click", () => {
+        closeModal("profileModal");
+        openModal("telegramModal");
+    });
+
+    document.getElementById("profilePlansBtn")?.addEventListener("click", () => {
+        closeModal("profileModal");
+        setActiveNavigation("profile");
+        focusNavigationSection(document.getElementById("subscriptionPanel"));
+    });
+
+    document.getElementById("profileLogoutBtn")?.addEventListener("click", () => {
+        closeModal("profileModal");
+        document.getElementById("logoutBtn")?.click();
+        setActiveNavigation("compress");
+    });
+
+    profileModal?.addEventListener("click", (event) => {
+        if (event.target === profileModal) {
+            closeModal("profileModal");
+        }
+    });
+
+    setActiveNavigation("compress");
+}
+
 function initializeApp() {
     initializeMembership();
     renderHistoryList();
+    initializeBottomNavigation();
     adjustMobileLayout();
     window.addEventListener("resize", adjustMobileLayout);
 
@@ -1622,6 +1835,11 @@ async function renderHistoryList() {
     const records = await getAllRecords();
     historyList.innerHTML = "";
     historyBadge.textContent = records.length;
+    const navHistoryCount = document.getElementById("navHistoryCount");
+    if (navHistoryCount) {
+        navHistoryCount.textContent = String(records.length);
+        navHistoryCount.hidden = records.length === 0;
+    }
 
     if (records.length === 0) {
         historyList.innerHTML = `<div class="history-item-empty">No history records found</div>`;
@@ -1703,6 +1921,11 @@ async function renderHistoryList() {
 historyHeader.addEventListener("click", () => {
     const container = historyHeader.parentElement;
     container.classList.toggle("collapsed");
+    const expanded = !container.classList.contains("collapsed");
+    document.getElementById("historyToggleBtn")?.setAttribute(
+        "aria-expanded",
+        String(expanded),
+    );
 });
 
 clearHistoryBtn.addEventListener("click", async () => {
