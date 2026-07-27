@@ -239,16 +239,16 @@
         <div class="subscription-heading">
           <div>
             <div class="subscription-eyebrow">
-              OPTIONAL MEMBERSHIP PLANS
+              SUBSCRIPTION REQUIRED
             </div>
 
             <h2 id="subscriptionTitle">
-              ជ្រើសរើសគម្រោង (មិនបង្ខំ)
+              ជ្រើសរើសគម្រោងដើម្បី Compress វីដេអូ
             </h2>
 
             <p>
-              Login ជាមួយ Telegram រួច អ្នកអាច Compress វីដេអូបានភ្លាមៗ។
-              គម្រោងខាងក្រោមគឺសម្រាប់មុខងារ Premium នៅពេលអនាគត ហើយ KHQR គឺ Demo ប៉ុណ្ណោះ។
+              Login ជាមួយ Telegram ហើយជ្រើសរើស PRO, PREMIUM ឬ MAX។
+              បើគ្មានគម្រោងសកម្ម ប៊ូតុង Compress នឹងត្រូវបានបិទ។ KHQR នៅទីនេះគឺ Demo ប៉ុណ្ណោះ។
             </p>
           </div>
 
@@ -364,13 +364,19 @@
                 type="button"
                 class="btn btn-patch"
                 id="patchBtn"
+                data-access-state="login-required"
                 disabled
               >
+                <i class="ri-lock-2-line patch-access-icon" aria-hidden="true"></i>
                 <span>
-                  ចាប់ផ្តើមកែវីដេអូ
+                  Login Required
                 </span>
               </button>
             </div>
+
+            <p class="patch-access-hint" id="patchAccessHint" role="status">
+              Login with Telegram, then activate a subscription plan to compress videos.
+            </p>
 
             <a
               class="btn btn-tiktok"
@@ -911,24 +917,24 @@
           <div class="profile-subscription-heading">
             <div>
               <span>SUBSCRIPTION</span>
-              <strong id="profilePlanName">FREE</strong>
+              <strong id="profilePlanName">NO PLAN</strong>
             </div>
-            <span class="profile-plan-badge" id="profilePlanBadge">Free access</span>
+            <span class="profile-plan-badge" id="profilePlanBadge">Subscription required</span>
           </div>
 
           <div class="profile-subscription-details">
             <div>
               <span>Status</span>
-              <strong id="profilePlanStatus">Active</strong>
+              <strong id="profilePlanStatus">Inactive</strong>
             </div>
             <div>
               <span>Expires</span>
-              <strong id="profilePlanExpiry">No expiry</strong>
+              <strong id="profilePlanExpiry">—</strong>
             </div>
           </div>
 
           <p id="profilePlanDescription">
-            Telegram login gives you access to the video compressor. Paid plans are optional.
+            Choose PRO, PREMIUM, or MAX to unlock video compression.
           </p>
         </section>
       </div>
@@ -1109,7 +1115,7 @@
 
   <script
     type="module"
-    src="app.js?v=20260727-bottom-nav-profile"
+    src="app.js?v=20260727-subscription-gate"
   ></script>
 </body>
 </html>

@@ -2468,3 +2468,50 @@ body {
 [hidden] {
   display: none !important;
 }
+
+
+/* Active-subscription gate for video compression */
+.btn-patch {
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.patch-access-icon {
+  display: none;
+  font-size: 16px;
+}
+
+.btn-patch[data-access-state="login-required"] .patch-access-icon,
+.btn-patch[data-access-state="subscription-required"] .patch-access-icon {
+  display: inline-block;
+}
+
+.btn-patch[data-access-state="subscription-required"]:disabled {
+  background: linear-gradient(135deg, rgba(168, 85, 247, .13), rgba(34, 211, 238, .07));
+  color: #c4b5fd;
+  border-color: rgba(192, 132, 252, .24);
+  opacity: .82;
+}
+
+.patch-access-hint {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(244, 114, 182, .18);
+  border-radius: 10px;
+  background: rgba(244, 63, 94, .07);
+  color: #f0abfc;
+  font-size: 11px;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.patch-access-hint[hidden] {
+  display: none !important;
+}
+
+.subscription-status.required {
+  border-color: rgba(244, 114, 182, .3);
+  background: rgba(244, 63, 94, .1);
+  color: #f9a8d4;
+}

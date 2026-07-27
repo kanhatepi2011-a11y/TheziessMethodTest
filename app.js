@@ -139,7 +139,7 @@ function hasActiveSubscription() {
 }
 
 function formatSubscriptionExpiry(subscription) {
-    if (!subscription) return "No active plan";
+    if (!subscription) return "No active subscription";
     if (subscription.planId === "max") return "MAX · Unlimited";
     return `${PLANS[subscription.planId]?.name || "PLAN"} · until ${new Date(subscription.expiresAt).toLocaleDateString()}`;
 }
@@ -193,7 +193,11 @@ function updateTelegramProfileUI(loggedIn, active) {
     setElementText("telegramAccountUsername", username);
     setElementText(
         "telegramAccountPlan",
-        active ? formatSubscriptionExpiry(currentSubscription) : "Free access",
+        active
+            ? formatSubscriptionExpiry(currentSubscription)
+            : loggedIn
+              ? "No active subscription"
+              : "Login required",
     );
 
     const configurePhoto = (image, initialsElement = null) => {
@@ -225,7 +229,14 @@ function updateTelegramProfileUI(loggedIn, active) {
     setElementText("profileName", loggedIn ? displayName : "Telegram User");
     setElementText("profileUsername", username);
     setElementText("profileTelegramId", loggedIn ? String(currentUser.id || "—") : "—");
-    setElementText("profileAccessLevel", loggedIn ? "Compressor unlocked" : "Login required");
+    setElementText(
+        "profileAccessLevel",
+        active
+            ? "Compressor unlocked"
+            : loggedIn
+              ? "Subscription required"
+              : "Login required",
+    );
     setElementText("profileConnectionStatus", loggedIn ? "Telegram connected" : "Telegram not connected");
 
     if (profileConnectionStatus) {
@@ -250,13 +261,13 @@ function updateTelegramProfileUI(loggedIn, active) {
         );
         profilePlanBadge?.classList.add("premium");
     } else if (loggedIn) {
-        setElementText("profilePlanName", "FREE");
-        setElementText("profilePlanBadge", "Free access");
-        setElementText("profilePlanStatus", "Active");
-        setElementText("profilePlanExpiry", "No expiry");
+        setElementText("profilePlanName", "NO PLAN");
+        setElementText("profilePlanBadge", "Subscription required");
+        setElementText("profilePlanStatus", "Inactive");
+        setElementText("profilePlanExpiry", "—");
         setElementText(
             "profilePlanDescription",
-            "Telegram login gives you access to the video compressor. Paid plans are optional.",
+            "Choose PRO, PREMIUM, or MAX to unlock video compression.",
         );
         profilePlanBadge?.classList.remove("premium");
     } else {
@@ -297,15 +308,16 @@ function updateAccessUI() {
         subscriptionStatus.textContent = active
             ? formatSubscriptionExpiry(currentSubscription)
             : loggedIn
-              ? "Telegram connected · Free access"
+              ? "Subscription required"
               : "Login required";
         subscriptionStatus.classList.toggle("active", active);
-        subscriptionStatus.classList.toggle("connected", loggedIn && !active);
+        subscriptionStatus.classList.toggle("connected", false);
+        subscriptionStatus.classList.toggle("required", loggedIn && !active);
     }
     document.querySelectorAll(".plan-card").forEach((card) => card.classList.toggle("current", active && card.dataset.plan === currentSubscription?.planId));
 
-    // Telegram login now grants access immediately. A paid plan is optional
-    // and no longer controls the full-page lock or the video tools.
+    // Telegram login unlocks the account area, but video compression requires
+    // a currently active subscription. The full-page lock remains login-only.
     document.body.classList.toggle("access-granted", loggedIn);
     if (lock) lock.hidden = loggedIn;
     updateTelegramProfileUI(loggedIn, active);
@@ -315,6 +327,23 @@ function updateAccessUI() {
 function requireLogin() {
     if (currentUser) return true;
     openModal("telegramModal");
+    updateAccessUI();
+    return false;
+}
+
+function requireActiveSubscription({ focusPlans = true } = {}) {
+    if (!requireLogin()) return false;
+    if (hasActiveSubscription()) return true;
+
+    logMessage(
+        "An active subscription is required before you can compress videos.",
+        "warning",
+    );
+
+    if (focusPlans) {
+        focusNavigationSection(document.getElementById("subscriptionPanel"));
+    }
+
     updateAccessUI();
     return false;
 }
@@ -380,7 +409,12 @@ async function initializeMembership() {
         params.delete("telegram_login");
         history.replaceState({}, "", `${location.pathname}${params.toString() ? `?${params}` : ""}${location.hash}`);
         if (currentUser) {
-            logMessage("Telegram account verified successfully. Free access unlocked.", "success");
+            logMessage(
+                hasActiveSubscription()
+                    ? "Telegram account verified. Your subscription is active."
+                    : "Telegram account verified. Choose a subscription plan to enable compression.",
+                hasActiveSubscription() ? "success" : "warning",
+            );
         } else {
             logMessage("Telegram returned successfully, but the login session could not be loaded. Please try logging in again.", "error");
         }
@@ -951,12 +985,36 @@ function removeFile(index) {
 }
 
 function updatePatchButton() {
+    const label = patchBtn.querySelector("span");
+    const hint = document.getElementById("patchAccessHint");
+
     if (!currentUser) {
         patchBtn.disabled = true;
-        const label = patchBtn.querySelector("span");
+        patchBtn.dataset.accessState = "login-required";
+        patchBtn.title = "Login with Telegram before compressing a video.";
         if (label) label.textContent = "Login Required";
+        if (hint) {
+            hint.hidden = false;
+            hint.textContent = "Login with Telegram, then activate a subscription plan to compress videos.";
+        }
         return;
     }
+
+    if (!hasActiveSubscription()) {
+        patchBtn.disabled = true;
+        patchBtn.dataset.accessState = "subscription-required";
+        patchBtn.title = "Activate PRO, PREMIUM, or MAX to unlock video compression.";
+        if (label) label.textContent = "Subscription Required";
+        if (hint) {
+            hint.hidden = false;
+            hint.textContent = "No active subscription. Choose PRO, PREMIUM, or MAX above to unlock compression.";
+        }
+        return;
+    }
+
+    patchBtn.dataset.accessState = "active";
+    patchBtn.removeAttribute("title");
+    if (hint) hint.hidden = true;
     const failedCount = selectedFiles.filter(
         (f) => f.status === "error",
     ).length;
@@ -1614,7 +1672,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 patchBtn.addEventListener("click", async () => {
-    if (!requireLogin()) return;
+    if (!requireActiveSubscription()) return;
     const failedItems = selectedFiles.filter((f) => f.status === "error");
     if (failedItems.length > 0) {
         for (const item of failedItems) {
