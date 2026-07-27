@@ -164,3 +164,10 @@ All notable changes to the NoBlur project are documented in this file.
 - **Quantum Matrix Patch:** Big-endian integer manipulation patching the `mvhd` display matrix.
 - **Tactile Neo-Brutalist Layout:** Premium high-contrast dark card interface with flat offset shadows.
 - **Local Persistence Storage:** IndexedDB local history tracking with 12-hour pruning and 200MB limit.
+
+## 2.7.0 - Telegram Admin Bot
+
+- Added secure Telegram webhook and protected webhook setup endpoint.
+- Added admin dashboard, user search, subscription, trial, payment and stats commands.
+- Added server-side compression metadata counters without uploading video files.
+- Added admin-only access using `TELEGRAM_ADMIN_IDS`.

@@ -15,7 +15,8 @@ export default async function handler(req, res) {
         NOW() AS server_time,
         to_regclass('theziess_free_trials_v5') IS NOT NULL AS free_trials_ready,
         to_regclass('theziess_subscriptions_v5') IS NOT NULL AS subscriptions_ready,
-        to_regclass('theziess_payments_v5') IS NOT NULL AS payments_ready
+        to_regclass('theziess_payments_v5') IS NOT NULL AS payments_ready,
+        to_regclass('theziess_compression_events_v1') IS NOT NULL AS compression_events_ready
     `);
 
     return res.status(200).json({
@@ -25,7 +26,8 @@ export default async function handler(req, res) {
       freeTrialsReady: result.rows[0].free_trials_ready,
       subscriptionsReady: result.rows[0].subscriptions_ready,
       paymentsReady: result.rows[0].payments_ready,
-      schemaVersion: "subscription-storage-v5-isolated",
+      compressionEventsReady: result.rows[0].compression_events_ready,
+      schemaVersion: "telegram-admin-bot-v1",
     });
   } catch (error) {
     console.error("Database status error:", {

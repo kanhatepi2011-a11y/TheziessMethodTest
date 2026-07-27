@@ -148,3 +148,54 @@ This version permanently stores Telegram users, subscriptions, and KHQR demo pay
 The API automatically creates the `users`, `subscriptions`, and `payments` tables on first use. You can also run `database.sql` manually in your PostgreSQL SQL editor.
 
 Never expose `DATABASE_URL`, the Telegram bot token, or the session secret in frontend code.
+
+## Telegram Admin Bot
+
+The Vercel backend includes a secure Telegram webhook that lets configured
+administrators inspect website users from Telegram.
+
+### Available commands
+
+- `/admin` — open the button-based admin dashboard
+- `/stats` — user, subscription, payment and compression totals
+- `/users [page]` — registered users ordered by latest login
+- `/user <telegram_id|@username>` — full user details
+- `/subscriptions` — active PRO, PREMIUM and MAX plans
+- `/trials` — active FREE 3-day trials
+- `/payments` — recent payment records
+- `/id` — show your own Telegram ID
+
+The bot shows only information saved by this application: Telegram login
+profile, registration and login times, subscription/trial history, payment
+records and compression metadata. It cannot read private chats, contacts,
+phone numbers, email addresses or Telegram last-seen status.
+
+### Vercel environment variables
+
+```env
+TELEGRAM_BOT_TOKEN=123456789:BOTFATHER_TOKEN
+TELEGRAM_ADMIN_IDS=YOUR_TELEGRAM_ID
+TELEGRAM_WEBHOOK_SECRET=random_letters_numbers_underscore_or_hyphen
+TELEGRAM_SETUP_KEY=a_long_random_setup_password
+ADMIN_TIMEZONE=Asia/Phnom_Penh
+```
+
+After deploying, register the webhook once from PowerShell:
+
+```powershell
+$body = @{ setupKey = "YOUR_TELEGRAM_SETUP_KEY" } | ConvertTo-Json
+Invoke-RestMethod `
+  -Method POST `
+  -Uri "https://YOUR-VERCEL-DOMAIN/api/telegram/setup" `
+  -ContentType "application/json" `
+  -Body $body
+```
+
+Then open the bot in Telegram and send `/admin`. If you do not know your
+Telegram ID yet, send `/id`, add the returned number to
+`TELEGRAM_ADMIN_IDS`, redeploy, and run the setup request again so the admin
+command menu is installed for that chat.
+
+Webhook requests are checked with Telegram's
+`X-Telegram-Bot-Api-Secret-Token` header. Never commit the real bot token,
+setup key, webhook secret, session secret or database URL to GitHub.

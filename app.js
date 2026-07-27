@@ -84,6 +84,35 @@ function clearStoredTelegramUser() {
     }
 }
 
+async function reportCompressionActivity({
+    inputName,
+    outputName,
+    inputBytes,
+    outputBytes,
+    outputMime,
+}) {
+    if (!currentUser) return;
+
+    try {
+        await fetch("/api/activity/compression", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                inputName,
+                outputName,
+                inputBytes,
+                outputBytes,
+                outputMime,
+            }),
+        });
+    } catch (error) {
+        console.warn("Unable to save compression activity", error);
+    }
+}
+
 
 const supportedMimeTypes = [
     "video/mp4",
@@ -2049,6 +2078,15 @@ patchBtn.addEventListener("click", async () => {
                         blob,
                         mimeType: result.mimeType,
                     });
+
+                    void reportCompressionActivity({
+                        inputName: item.file?.name || "",
+                        outputName: result.outputName,
+                        inputBytes: item.file?.size || 0,
+                        outputBytes: result.finalBuffer.byteLength,
+                        outputMime: result.mimeType,
+                    });
+
                     await renderHistoryList();
                 } catch (dbError) {
                     logMessage(

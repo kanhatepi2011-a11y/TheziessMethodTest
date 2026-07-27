@@ -32,6 +32,7 @@ export function getPool() {
 const SUBSCRIPTIONS_TABLE = "theziess_subscriptions_v5";
 const FREE_TRIALS_TABLE = "theziess_free_trials_v5";
 const PAYMENTS_TABLE = "theziess_payments_v5";
+const COMPRESSION_EVENTS_TABLE = "theziess_compression_events_v1";
 
 let schemaPromise;
 
@@ -99,6 +100,19 @@ export async function ensureSchema() {
       `);
 
       await pool.query(`
+        CREATE TABLE IF NOT EXISTS ${COMPRESSION_EVENTS_TABLE} (
+          id BIGSERIAL PRIMARY KEY,
+          user_key TEXT NOT NULL,
+          input_name VARCHAR(255),
+          output_name VARCHAR(255),
+          input_bytes BIGINT,
+          output_bytes BIGINT,
+          output_mime VARCHAR(120),
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+
+      await pool.query(`
         CREATE INDEX IF NOT EXISTS theziess_subscriptions_v5_user_status_idx
           ON ${SUBSCRIPTIONS_TABLE}(user_key, status, expires_at DESC)
       `);
@@ -111,6 +125,12 @@ export async function ensureSchema() {
       await pool.query(`
         CREATE INDEX IF NOT EXISTS theziess_payments_v5_user_key_idx
           ON ${PAYMENTS_TABLE}(user_key)
+      `);
+
+
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS theziess_compression_events_v1_user_created_idx
+          ON ${COMPRESSION_EVENTS_TABLE}(user_key, created_at DESC)
       `);
     })().catch((error) => {
       schemaPromise = null;
@@ -526,4 +546,340 @@ export async function activateSubscription({
   }
 
   return subscription;
+}
+
+
+function normalizeText(value, maxLength = 255) {
+  const text = String(value || "").trim();
+  return text ? text.slice(0, maxLength) : null;
+}
+
+function normalizeByteCount(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) return null;
+  return Math.min(Math.trunc(number), Number.MAX_SAFE_INTEGER);
+}
+
+export async function recordCompressionEvent({
+  userId,
+  inputName,
+  outputName,
+  inputBytes,
+  outputBytes,
+  outputMime,
+}) {
+  await ensureSchema();
+
+  const result = await pool.query(
+    `
+      INSERT INTO ${COMPRESSION_EVENTS_TABLE} (
+        user_key,
+        input_name,
+        output_name,
+        input_bytes,
+        output_bytes,
+        output_mime
+      )
+      SELECT
+        id::TEXT,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6
+      FROM users
+      WHERE id::TEXT = $1::TEXT
+      RETURNING *
+    `,
+    [
+      String(userId),
+      normalizeText(inputName),
+      normalizeText(outputName),
+      normalizeByteCount(inputBytes),
+      normalizeByteCount(outputBytes),
+      normalizeText(outputMime, 120),
+    ],
+  );
+
+  if (!result.rows[0]) {
+    const error = new Error("Telegram account was not found.");
+    error.code = "USER_NOT_FOUND";
+    throw error;
+  }
+
+  return result.rows[0];
+}
+
+const ACTIVE_ACCESS_LATERAL = `
+  LEFT JOIN LATERAL (
+    SELECT access.*
+    FROM (
+      SELECT
+        plan_id::TEXT AS plan_id,
+        status::TEXT AS status,
+        starts_at,
+        expires_at,
+        2 AS priority
+      FROM ${SUBSCRIPTIONS_TABLE}
+      WHERE user_key = u.id::TEXT
+        AND status = 'active'
+        AND (plan_id = 'max' OR expires_at > NOW())
+
+      UNION ALL
+
+      SELECT
+        'free'::TEXT AS plan_id,
+        status::TEXT AS status,
+        starts_at,
+        expires_at,
+        1 AS priority
+      FROM ${FREE_TRIALS_TABLE}
+      WHERE user_key = u.id::TEXT
+        AND status = 'active'
+        AND expires_at > NOW()
+    ) access
+    ORDER BY priority DESC, starts_at DESC
+    LIMIT 1
+  ) active_access ON TRUE
+`;
+
+export async function getAdminStats() {
+  await ensureSchema();
+
+  const result = await pool.query(`
+    SELECT
+      (SELECT COUNT(*)::INTEGER FROM users) AS total_users,
+      (SELECT COUNT(*)::INTEGER FROM users WHERE last_login_at >= NOW() - INTERVAL '24 hours') AS users_last_24h,
+      (SELECT COUNT(*)::INTEGER FROM ${SUBSCRIPTIONS_TABLE} WHERE status = 'active' AND (plan_id = 'max' OR expires_at > NOW())) AS active_paid,
+      (SELECT COUNT(*)::INTEGER FROM ${FREE_TRIALS_TABLE} WHERE status = 'active' AND expires_at > NOW()) AS active_trials,
+      (SELECT COUNT(*)::INTEGER FROM ${COMPRESSION_EVENTS_TABLE}) AS total_compressions,
+      (SELECT COUNT(*)::INTEGER FROM ${COMPRESSION_EVENTS_TABLE} WHERE created_at >= NOW() - INTERVAL '24 hours') AS compressions_last_24h,
+      (SELECT COUNT(*)::INTEGER FROM ${PAYMENTS_TABLE}) AS total_payments,
+      (SELECT COALESCE(SUM(amount_usd), 0)::NUMERIC FROM ${PAYMENTS_TABLE} WHERE status = 'demo_paid') AS total_payment_amount
+  `);
+
+  return result.rows[0];
+}
+
+export async function listAdminUsers({ page = 1, pageSize = 8 } = {}) {
+  await ensureSchema();
+
+  const safePage = Math.max(1, Math.trunc(Number(page) || 1));
+  const safePageSize = Math.min(20, Math.max(1, Math.trunc(Number(pageSize) || 8)));
+  const offset = (safePage - 1) * safePageSize;
+
+  const [countResult, usersResult] = await Promise.all([
+    pool.query("SELECT COUNT(*)::INTEGER AS total FROM users"),
+    pool.query(
+      `
+        SELECT
+          u.*,
+          active_access.plan_id AS active_plan_id,
+          active_access.status AS active_status,
+          active_access.starts_at AS active_starts_at,
+          active_access.expires_at AS active_expires_at
+        FROM users u
+        ${ACTIVE_ACCESS_LATERAL}
+        ORDER BY u.last_login_at DESC, u.id DESC
+        LIMIT $1 OFFSET $2
+      `,
+      [safePageSize, offset],
+    ),
+  ]);
+
+  return {
+    users: usersResult.rows,
+    total: countResult.rows[0]?.total || 0,
+    page: safePage,
+    pageSize: safePageSize,
+  };
+}
+
+export async function findAdminUser(lookup) {
+  await ensureSchema();
+
+  const normalized = String(lookup || "").trim().replace(/^@/, "");
+  if (!normalized) return null;
+
+  const result = await pool.query(
+    `
+      SELECT
+        u.*,
+        active_access.plan_id AS active_plan_id,
+        active_access.status AS active_status,
+        active_access.starts_at AS active_starts_at,
+        active_access.expires_at AS active_expires_at
+      FROM users u
+      ${ACTIVE_ACCESS_LATERAL}
+      WHERE u.telegram_id::TEXT = $1::TEXT
+         OR u.id::TEXT = $1::TEXT
+         OR LOWER(COALESCE(u.username, '')) = LOWER($1)
+      ORDER BY u.last_login_at DESC
+      LIMIT 1
+    `,
+    [normalized],
+  );
+
+  return result.rows[0] || null;
+}
+
+export async function getAdminUserCompressionStats(userId) {
+  await ensureSchema();
+
+  const result = await pool.query(
+    `
+      SELECT
+        COUNT(*)::INTEGER AS total_compressions,
+        COALESCE(SUM(input_bytes), 0)::TEXT AS total_input_bytes,
+        COALESCE(SUM(output_bytes), 0)::TEXT AS total_output_bytes,
+        MAX(created_at) AS last_compression_at
+      FROM ${COMPRESSION_EVENTS_TABLE}
+      WHERE user_key = $1::TEXT
+    `,
+    [String(userId)],
+  );
+
+  return result.rows[0];
+}
+
+export async function listAdminUserCompressionEvents(userId, limit = 5) {
+  await ensureSchema();
+
+  const result = await pool.query(
+    `
+      SELECT *
+      FROM ${COMPRESSION_EVENTS_TABLE}
+      WHERE user_key = $1::TEXT
+      ORDER BY created_at DESC, id DESC
+      LIMIT $2
+    `,
+    [String(userId), Math.min(10, Math.max(1, Number(limit) || 5))],
+  );
+
+  return result.rows;
+}
+
+export async function listAdminUserAccessHistory(userId, limit = 6) {
+  await ensureSchema();
+
+  const result = await pool.query(
+    `
+      SELECT *
+      FROM (
+        SELECT
+          plan_id::TEXT AS plan_id,
+          status::TEXT AS status,
+          starts_at,
+          expires_at,
+          payment_method::TEXT AS payment_method,
+          created_at
+        FROM ${SUBSCRIPTIONS_TABLE}
+        WHERE user_key = $1::TEXT
+
+        UNION ALL
+
+        SELECT
+          'free'::TEXT AS plan_id,
+          status::TEXT AS status,
+          starts_at,
+          expires_at,
+          'free-trial'::TEXT AS payment_method,
+          created_at
+        FROM ${FREE_TRIALS_TABLE}
+        WHERE user_key = $1::TEXT
+      ) access_history
+      ORDER BY created_at DESC
+      LIMIT $2
+    `,
+    [String(userId), Math.min(12, Math.max(1, Number(limit) || 6))],
+  );
+
+  return result.rows;
+}
+
+export async function listAdminUserPayments(userId, limit = 5) {
+  await ensureSchema();
+
+  const result = await pool.query(
+    `
+      SELECT *
+      FROM ${PAYMENTS_TABLE}
+      WHERE user_key = $1::TEXT
+      ORDER BY created_at DESC, id DESC
+      LIMIT $2
+    `,
+    [String(userId), Math.min(10, Math.max(1, Number(limit) || 5))],
+  );
+
+  return result.rows;
+}
+
+export async function listAdminActiveSubscriptions(limit = 12) {
+  await ensureSchema();
+
+  const result = await pool.query(
+    `
+      SELECT
+        s.*,
+        u.telegram_id,
+        u.username,
+        u.first_name,
+        u.last_name
+      FROM ${SUBSCRIPTIONS_TABLE} s
+      LEFT JOIN users u ON u.id::TEXT = s.user_key
+      WHERE s.status = 'active'
+        AND (s.plan_id = 'max' OR s.expires_at > NOW())
+      ORDER BY s.created_at DESC
+      LIMIT $1
+    `,
+    [Math.min(30, Math.max(1, Number(limit) || 12))],
+  );
+
+  return result.rows;
+}
+
+export async function listAdminActiveTrials(limit = 12) {
+  await ensureSchema();
+
+  const result = await pool.query(
+    `
+      SELECT
+        t.*,
+        u.telegram_id,
+        u.username,
+        u.first_name,
+        u.last_name
+      FROM ${FREE_TRIALS_TABLE} t
+      LEFT JOIN users u ON u.id::TEXT = t.user_key
+      WHERE t.status = 'active'
+        AND t.expires_at > NOW()
+      ORDER BY t.expires_at ASC
+      LIMIT $1
+    `,
+    [Math.min(30, Math.max(1, Number(limit) || 12))],
+  );
+
+  return result.rows;
+}
+
+export async function listAdminRecentPayments(limit = 12) {
+  await ensureSchema();
+
+  const result = await pool.query(
+    `
+      SELECT
+        p.*,
+        u.telegram_id,
+        u.username,
+        u.first_name,
+        u.last_name
+      FROM ${PAYMENTS_TABLE} p
+      LEFT JOIN users u ON u.id::TEXT = p.user_key
+      ORDER BY p.created_at DESC, p.id DESC
+      LIMIT $1
+    `,
+    [Math.min(30, Math.max(1, Number(limit) || 12))],
+  );
+
+  return result.rows;
 }

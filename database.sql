@@ -54,3 +54,19 @@ CREATE INDEX IF NOT EXISTS theziess_free_trials_v5_user_status_idx
 
 CREATE INDEX IF NOT EXISTS theziess_payments_v5_user_key_idx
   ON theziess_payments_v5(user_key);
+
+-- Server-side activity counters for the admin Telegram bot.
+-- Video files are NOT uploaded here; only names, sizes, MIME type and time.
+CREATE TABLE IF NOT EXISTS theziess_compression_events_v1 (
+  id BIGSERIAL PRIMARY KEY,
+  user_key TEXT NOT NULL,
+  input_name VARCHAR(255),
+  output_name VARCHAR(255),
+  input_bytes BIGINT,
+  output_bytes BIGINT,
+  output_mime VARCHAR(120),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS theziess_compression_events_v1_user_created_idx
+  ON theziess_compression_events_v1(user_key, created_at DESC);
