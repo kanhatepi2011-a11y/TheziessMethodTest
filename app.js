@@ -84,6 +84,52 @@ function clearStoredTelegramUser() {
     }
 }
 
+const TELEGRAM_BOT_BOOTSTRAP_KEY = "theziess.telegram.botBootstrapAt";
+const TELEGRAM_BOT_BOOTSTRAP_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+async function autoConnectTelegramAdminBot() {
+    try {
+        const lastBootstrapAt = Number(
+            localStorage.getItem(TELEGRAM_BOT_BOOTSTRAP_KEY) || 0,
+        );
+
+        if (
+            Number.isFinite(lastBootstrapAt) &&
+            Date.now() - lastBootstrapAt < TELEGRAM_BOT_BOOTSTRAP_INTERVAL_MS
+        ) {
+            return;
+        }
+
+        const response = await fetch("/api/telegram/setup", {
+            method: "POST",
+            cache: "no-store",
+            credentials: "same-origin",
+            headers: {
+                "Content-Type": "application/json",
+                "X-TheZiess-Auto-Setup": "1",
+            },
+            body: JSON.stringify({ automatic: true }),
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok || !data.ok) {
+            console.warn(
+                "Telegram admin bot auto-connect is not ready:",
+                data.error || data.message || response.status,
+            );
+            return;
+        }
+
+        localStorage.setItem(
+            TELEGRAM_BOT_BOOTSTRAP_KEY,
+            String(Date.now()),
+        );
+    } catch (error) {
+        console.warn("Unable to auto-connect Telegram admin bot", error);
+    }
+}
+
 async function reportCompressionActivity({
     inputName,
     outputName,
@@ -866,6 +912,7 @@ function initializeBottomNavigation() {
 
 function initializeApp() {
     initializeMembership();
+    autoConnectTelegramAdminBot();
     renderHistoryList();
     initializeBottomNavigation();
     adjustMobileLayout();

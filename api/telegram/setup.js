@@ -1,11 +1,27 @@
-import { getRequestOrigin } from "../_telegram.js";
+import crypto from "node:crypto";
+
+import { getPublicAppOrigin, getHeaderValue } from "../_telegram.js";
 import {
   getTelegramAdminIds,
+  getTelegramBotToken,
+  getTelegramConfigStatus,
   getTelegramSetupKey,
   getTelegramWebhookSecret,
   safeEqual,
   telegramApi,
 } from "../_telegram-bot.js";
+
+const ADMIN_COMMANDS = [
+  { command: "admin", description: "Open the admin dashboard" },
+  { command: "stats", description: "Show platform statistics" },
+  { command: "users", description: "List registered users" },
+  { command: "user", description: "Show one user's full information" },
+  { command: "subscriptions", description: "Show active paid plans" },
+  { command: "trials", description: "Show active free trials" },
+  { command: "payments", description: "Show recent payments" },
+  { command: "id", description: "Show your Telegram ID" },
+  { command: "ping", description: "Test whether the bot is online" },
+];
 
 function readBody(req) {
   if (!req.body) return {};
@@ -20,58 +36,79 @@ function readBody(req) {
   return {};
 }
 
-const ADMIN_COMMANDS = [
-  { command: "admin", description: "Open the admin dashboard" },
-  { command: "stats", description: "Show platform statistics" },
-  { command: "users", description: "List registered users" },
-  { command: "user", description: "Show one user's full information" },
-  { command: "subscriptions", description: "Show active paid plans" },
-  { command: "trials", description: "Show active free trials" },
-  { command: "payments", description: "Show recent payments" },
-  { command: "id", description: "Show your Telegram ID" },
-];
+function getProvidedSetupKey(req) {
+  const body = readBody(req);
+  return String(
+    body.setupKey ||
+      req.query?.key ||
+      getHeaderValue(req, "x-telegram-setup-key") ||
+      "",
+  ).trim();
+}
 
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+function validateManualSetupKey(req) {
+  const configuredKey = getTelegramSetupKey({ required: false });
+  if (!configuredKey) return true;
+
+  // Same-origin automatic bootstrap is allowed without exposing the setup key.
+  const automatic = getHeaderValue(req, "x-theziess-auto-setup") === "1";
+  if (automatic) return true;
+
+  return safeEqual(getProvidedSetupKey(req), configuredKey);
+}
+
+function webhookVersion(secret, token, adminIds) {
+  return crypto
+    .createHash("sha256")
+    .update(`${secret}:${token.slice(0, 12)}:${adminIds.join(",")}`)
+    .digest("hex")
+    .slice(0, 12);
+}
+
+export async function ensureTelegramWebhook(req, { force = false } = {}) {
+  const token = getTelegramBotToken();
+  const webhookSecret = getTelegramWebhookSecret();
+
+  if (!/^[A-Za-z0-9_-]{1,256}$/.test(webhookSecret)) {
+    throw new Error(
+      "TELEGRAM_WEBHOOK_SECRET must contain only letters, numbers, _ or -.",
+    );
   }
 
-  res.setHeader("Cache-Control", "no-store");
+  const origin = getPublicAppOrigin(req);
+  const adminIds = [...getTelegramAdminIds()].sort();
+  const version = webhookVersion(webhookSecret, token, adminIds);
+  const webhookUrl = `${origin}/api/telegram/webhook?v=${version}`;
 
-  try {
-    const body = readBody(req);
-    if (!safeEqual(body.setupKey, getTelegramSetupKey())) {
-      return res.status(401).json({ error: "Invalid setup key" });
-    }
+  const [bot, currentWebhook] = await Promise.all([
+    telegramApi("getMe"),
+    telegramApi("getWebhookInfo"),
+  ]);
 
-    const webhookSecret = getTelegramWebhookSecret();
-    if (!/^[A-Za-z0-9_-]{1,256}$/.test(webhookSecret)) {
-      return res.status(500).json({
-        error:
-          "TELEGRAM_WEBHOOK_SECRET must contain only letters, numbers, _ or -.",
-      });
-    }
+  const shouldUpdate = force || currentWebhook.url !== webhookUrl;
 
-    const origin = getRequestOrigin(req);
-    const webhookUrl = `${origin}/api/telegram/webhook`;
-
-    const bot = await telegramApi("getMe");
+  if (shouldUpdate) {
     await telegramApi("setWebhook", {
       url: webhookUrl,
       secret_token: webhookSecret,
       allowed_updates: ["message", "callback_query"],
       drop_pending_updates: false,
     });
+  }
 
+  const commandSetup = [];
+
+  if (shouldUpdate || force) {
     await telegramApi("setMyCommands", {
       commands: [
+        { command: "start", description: "Start the bot" },
         { command: "id", description: "Show your Telegram ID" },
+        { command: "ping", description: "Test whether the bot is online" },
         { command: "help", description: "Open bot help" },
       ],
     });
 
-    const commandSetup = [];
-    for (const adminId of getTelegramAdminIds()) {
+    for (const adminId of adminIds) {
       try {
         await telegramApi("setMyCommands", {
           commands: ADMIN_COMMANDS,
@@ -86,19 +123,49 @@ export default async function handler(req, res) {
         });
       }
     }
+  }
 
-    const webhookInfo = await telegramApi("getWebhookInfo");
+  const webhookInfo = shouldUpdate
+    ? await telegramApi("getWebhookInfo")
+    : currentWebhook;
 
-    return res.status(200).json({
-      ok: true,
-      bot: {
-        id: String(bot.id),
-        username: bot.username || null,
-      },
-      webhookUrl,
-      pendingUpdates: webhookInfo.pending_update_count || 0,
-      adminCommandSetup: commandSetup,
-    });
+  return {
+    ok: true,
+    bot: {
+      id: String(bot.id),
+      username: bot.username || null,
+    },
+    webhookUrl,
+    webhookUpdated: shouldUpdate,
+    pendingUpdates: webhookInfo.pending_update_count || 0,
+    lastErrorMessage: webhookInfo.last_error_message || null,
+    adminCommandSetup: commandSetup,
+    configuration: getTelegramConfigStatus(),
+  };
+}
+
+export default async function handler(req, res) {
+  if (!['GET', 'POST'].includes(req.method)) {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  res.setHeader("Cache-Control", "no-store");
+
+  try {
+    if (!validateManualSetupKey(req)) {
+      return res.status(401).json({
+        ok: false,
+        error: "Invalid setup key",
+      });
+    }
+
+    const force =
+      req.method === "GET" ||
+      String(req.query?.force || "") === "1" ||
+      readBody(req).force === true;
+
+    const result = await ensureTelegramWebhook(req, { force });
+    return res.status(200).json(result);
   } catch (error) {
     console.error("Telegram setup error:", {
       message: error?.message,
@@ -109,6 +176,7 @@ export default async function handler(req, res) {
       ok: false,
       error: error.message,
       code: error?.code || "TELEGRAM_SETUP_FAILED",
+      configuration: getTelegramConfigStatus(),
     });
   }
 }

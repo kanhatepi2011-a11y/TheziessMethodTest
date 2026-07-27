@@ -1,15 +1,16 @@
-import {
-  findAdminUser,
-  getAdminStats,
-  getAdminUserCompressionStats,
-  listAdminActiveSubscriptions,
-  listAdminActiveTrials,
-  listAdminRecentPayments,
-  listAdminUserAccessHistory,
-  listAdminUserCompressionEvents,
-  listAdminUserPayments,
-  listAdminUsers,
-} from "../_db.js";
+import { getHeaderValue } from "../_telegram.js";
+
+let databaseModulePromise;
+
+function getDatabaseModule() {
+  if (!databaseModulePromise) {
+    databaseModulePromise = import("../_db.js").catch((error) => {
+      databaseModulePromise = null;
+      throw error;
+    });
+  }
+  return databaseModulePromise;
+}
 import {
   answerTelegramCallback,
   escapeTelegramHtml,
@@ -121,6 +122,7 @@ function dashboardKeyboard() {
 }
 
 async function buildStatsMessage() {
+  const { getAdminStats } = await getDatabaseModule();
   const stats = await getAdminStats();
 
   return [
@@ -140,6 +142,7 @@ async function buildStatsMessage() {
 }
 
 async function sendDashboard(chatId) {
+  const { getAdminStats } = await getDatabaseModule();
   const stats = await getAdminStats();
   const message = [
     "<b>🛡 TheZiess Admin Panel</b>",
@@ -157,6 +160,7 @@ async function sendDashboard(chatId) {
 }
 
 async function sendUsers(chatId, requestedPage = 1) {
+  const { listAdminUsers } = await getDatabaseModule();
   const result = await listAdminUsers({
     page: requestedPage,
     pageSize: PAGE_SIZE,
@@ -204,6 +208,13 @@ async function sendUsers(chatId, requestedPage = 1) {
 }
 
 async function sendUserDetails(chatId, lookup) {
+  const {
+    findAdminUser,
+    getAdminUserCompressionStats,
+    listAdminUserAccessHistory,
+    listAdminUserCompressionEvents,
+    listAdminUserPayments,
+  } = await getDatabaseModule();
   const user = await findAdminUser(lookup);
 
   if (!user) {
@@ -280,6 +291,7 @@ async function sendUserDetails(chatId, lookup) {
 }
 
 async function sendSubscriptions(chatId) {
+  const { listAdminActiveSubscriptions } = await getDatabaseModule();
   const subscriptions = await listAdminActiveSubscriptions(15);
   const lines = ["<b>💎 Active Paid Subscriptions</b>", ""];
 
@@ -302,6 +314,7 @@ async function sendSubscriptions(chatId) {
 }
 
 async function sendTrials(chatId) {
+  const { listAdminActiveTrials } = await getDatabaseModule();
   const trials = await listAdminActiveTrials(15);
   const lines = ["<b>🆓 Active 3-Day Trials</b>", ""];
 
@@ -324,6 +337,7 @@ async function sendTrials(chatId) {
 }
 
 async function sendPayments(chatId) {
+  const { listAdminRecentPayments } = await getDatabaseModule();
   const payments = await listAdminRecentPayments(15);
   const lines = ["<b>💳 Recent Payments</b>", ""];
 
@@ -384,6 +398,34 @@ async function handleMessage(message) {
         `<code>${escapeTelegramHtml(senderId)}</code>`,
         "",
         "Add this number to <code>TELEGRAM_ADMIN_IDS</code> in Vercel to enable admin access.",
+      ].join("\n"),
+    );
+    return;
+  }
+
+  if (command === "ping") {
+    await sendTelegramMessage(
+      chatId,
+      [
+        "✅ <b>TheZiess bot is online</b>",
+        "",
+        `Your Telegram ID: <code>${escapeTelegramHtml(senderId)}</code>`,
+        `Admin access: <b>${isTelegramAdmin(senderId) ? "Enabled" : "Not configured"}</b>`,
+      ].join("\n"),
+    );
+    return;
+  }
+
+  if ((command === "start" || command === "help") && !isTelegramAdmin(senderId)) {
+    await sendTelegramMessage(
+      chatId,
+      [
+        "<b>👋 TheZiess Method Bot</b>",
+        "",
+        "The bot connection is working.",
+        `Your Telegram ID: <code>${escapeTelegramHtml(senderId)}</code>`,
+        "",
+        "Add this ID to <code>TELEGRAM_ADMIN_IDS</code>, redeploy, then send <code>/admin</code>.",
       ].join("\n"),
     );
     return;
@@ -467,21 +509,32 @@ async function handleCallback(callbackQuery) {
 }
 
 export default async function handler(req, res) {
+  if (req.method === "GET") {
+    return res.status(200).json({
+      ok: true,
+      service: "TheZiess Telegram webhook",
+      message: "Webhook endpoint is online. Use /api/telegram/health for connection status.",
+    });
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   res.setHeader("Cache-Control", "no-store");
+  let update = {};
 
   try {
-    const receivedSecret =
-      req.headers?.["x-telegram-bot-api-secret-token"] || "";
+    const receivedSecret = getHeaderValue(
+      req,
+      "x-telegram-bot-api-secret-token",
+    );
 
     if (!safeEqual(receivedSecret, getTelegramWebhookSecret())) {
       return res.status(401).json({ error: "Invalid webhook secret" });
     }
 
-    const update = readBody(req);
+    update = readBody(req);
 
     if (update.callback_query) {
       await handleCallback(update.callback_query);
@@ -496,6 +549,28 @@ export default async function handler(req, res) {
       code: error?.code,
       stack: error?.stack,
     });
+
+    const chatId =
+      update.message?.chat?.id ||
+      update.callback_query?.message?.chat?.id ||
+      null;
+
+    if (chatId) {
+      try {
+        await sendTelegramMessage(
+          chatId,
+          [
+            "⚠️ <b>Bot backend error</b>",
+            "",
+            escapeTelegramHtml(error?.message || "Unknown server error"),
+            "",
+            "Open <code>/api/telegram/health</code> on your website to check the configuration.",
+          ].join("\n"),
+        );
+      } catch (notificationError) {
+        console.error("Unable to send Telegram error notification:", notificationError);
+      }
+    }
 
     // Return 200 after logging so Telegram does not repeatedly deliver a bad update.
     return res.status(200).json({ ok: false });
