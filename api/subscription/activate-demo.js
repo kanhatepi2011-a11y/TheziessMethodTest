@@ -1,6 +1,8 @@
 import {
   activateSubscription,
+  findActiveSubscription,
   findUserById,
+  hasUsedFreeTrial,
 } from "../_db.js";
 
 import {
@@ -8,6 +10,7 @@ import {
 } from "../_session.js";
 
 const ALLOWED_PLANS = new Set([
+  "free",
   "pro",
   "premium",
   "max",
@@ -58,6 +61,26 @@ export default async function handler(req, res) {
       });
     }
 
+    if (
+      planId === "free" &&
+      await findActiveSubscription(user.id)
+    ) {
+      return res.status(409).json({
+        error:
+          "You already have an active subscription. The free trial cannot replace it.",
+      });
+    }
+
+    if (
+      planId === "free" &&
+      await hasUsedFreeTrial(user.id)
+    ) {
+      return res.status(409).json({
+        error:
+          "The 3-day free trial has already been used for this Telegram account.",
+      });
+    }
+
     const subscription =
       await activateSubscription({
         userId:
@@ -66,7 +89,9 @@ export default async function handler(req, res) {
         planId,
 
         paymentMethod:
-          "khqr-demo",
+          planId === "free"
+            ? "free-trial"
+            : "khqr-demo",
       });
 
     return res.status(200).json({
@@ -103,6 +128,16 @@ export default async function handler(req, res) {
       "Subscription activation error:",
       error,
     );
+
+    if (
+      error?.code === "23505" &&
+      error?.constraint === "subscriptions_one_free_trial_per_user"
+    ) {
+      return res.status(409).json({
+        error:
+          "The 3-day free trial has already been used for this Telegram account.",
+      });
+    }
 
     return res.status(500).json({
       error:

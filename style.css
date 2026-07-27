@@ -1894,18 +1894,24 @@ body::before {
 .subscription-status { white-space:nowrap; padding:8px 11px; border-radius:999px; border:1px solid rgba(244,63,94,.25); background:rgba(244,63,94,.1); color:#fda4af; font-size:11px; font-weight:700; }
 .subscription-status.connected { border-color:rgba(56,189,248,.3); background:rgba(56,189,248,.1); color:#7dd3fc; }
 .subscription-status.active { border-color:rgba(52,211,153,.3); background:rgba(52,211,153,.1); color:#6ee7b7; }
-.plan-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+.plan-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
 .plan-card { position:relative; text-align:left; min-height:132px; padding:18px; border-radius:16px; border:1px solid rgba(216,180,254,.16); background:rgba(255,255,255,.025); color:#fff; cursor:pointer; display:flex; flex-direction:column; gap:7px; transition:.2s ease; }
 .plan-card:hover,.plan-card.current { transform:translateY(-3px); border-color:#c084fc; background:rgba(168,85,247,.11); }
 .plan-card strong { font-size:30px; }
 .plan-card small { color:#a99db7; }
 .plan-name { color:#d8b4fe; font:800 12px "JetBrains Mono",monospace; }
 .plan-featured { border-color:rgba(192,132,252,.45); }
+.plan-free { border-color:rgba(56,189,248,.38); background:linear-gradient(145deg,rgba(14,165,233,.09),rgba(168,85,247,.05)); }
 .plan-chip { position:absolute; right:12px; top:12px; background:#a855f7; color:#fff; padding:4px 7px; border-radius:999px; font-size:8px; font-weight:800; }
+.plan-chip-free { background:linear-gradient(135deg,#0ea5e9,#8b5cf6); }
+.plan-card:disabled { cursor:not-allowed; opacity:.58; transform:none; }
 .modal-copy { color:#b8adca; line-height:1.6; font-size:13px; }
 .demo-field { display:flex; flex-direction:column; gap:7px; color:#d8b4fe; font-size:12px; font-weight:700; margin-top:15px; }
 .demo-field input { width:100%; border:1px solid rgba(216,180,254,.2); background:#0b0611; color:#fff; border-radius:10px; padding:12px; outline:none; }
 .payment-body { display:grid; grid-template-columns:230px 1fr; gap:18px; align-items:start; }
+.payment-body.free-trial-mode { grid-template-columns:1fr; }
+.payment-body.free-trial-mode .payment-summary { grid-column:1; }
+.payment-body.free-trial-mode .demo-warning { grid-column:1; }
 .khqr-card { background:#fff; color:#111; border-radius:16px; overflow:hidden; padding-bottom:16px; text-align:center; }
 .khqr-top { background:#e21d2f; color:#fff; display:flex; justify-content:space-between; padding:12px 15px; font-size:12px; }
 .fake-qr { width:160px; height:160px; margin:17px auto 10px; background:repeating-conic-gradient(#111 0 25%,#fff 0 50%) 0/18px 18px; border:10px solid #fff; box-shadow:0 0 0 2px #111; }
@@ -1913,9 +1919,11 @@ body::before {
 .merchant-name { font-size:11px; font-weight:800; }.payment-amount { font-size:25px; font-weight:900; margin-top:3px; }
 .payment-summary { display:flex; flex-direction:column; gap:10px; }.payment-summary div { display:flex; justify-content:space-between; padding:12px; border:1px solid rgba(216,180,254,.14); border-radius:10px; }.payment-summary span { color:#a99db7; font-size:12px; }
 .demo-warning { grid-column:2; color:#f0abfc; padding:12px; border-radius:10px; background:rgba(217,70,239,.08); border:1px solid rgba(217,70,239,.18); font-size:11px; line-height:1.5; }
+.demo-warning.error { color:#fda4af; background:rgba(244,63,94,.1); border-color:rgba(244,63,94,.3); }
 .access-lock { position:fixed; inset:0; z-index:900; background:rgba(3,1,8,.45); backdrop-filter:blur(3px); pointer-events:none; display:flex; align-items:center; justify-content:center; }
 .access-lock[hidden] { display:none; }.access-lock>div { pointer-events:auto; max-width:390px; margin:18px; padding:24px; border-radius:18px; border:1px solid rgba(216,180,254,.25); background:#10091c; text-align:center; display:flex; flex-direction:column; gap:9px; box-shadow:0 25px 80px rgba(0,0,0,.6); }.access-lock i { font-size:30px; color:#c084fc; }.access-lock span { color:#a99db7; font-size:12px; }.access-lock button { margin-top:6px; padding:11px; border:0; border-radius:10px; background:linear-gradient(135deg,#7c3aed,#a855f7); color:#fff; font-weight:800; cursor:pointer; }
 .access-granted .access-lock { display:none; }
+@media(max-width:1000px){.plan-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:700px){.account-bar,.subscription-heading{flex-direction:column}.plan-grid{grid-template-columns:1fr}.payment-body{grid-template-columns:1fr}.demo-warning{grid-column:1}.khqr-card{max-width:260px;margin:auto;width:100%}}
 .telegram-widget-real { min-height: 52px; display:flex; align-items:center; justify-content:center; padding:14px; border:1px solid rgba(168,85,247,.22); border-radius:14px; background:rgba(10,6,20,.5); }
 .telegram-domain-note { margin:12px 0 0; text-align:center; color:#8f839d; font-size:11px; }
@@ -2366,6 +2374,12 @@ body {
   color: #6ee7b7;
 }
 
+.profile-plan-badge.trial {
+  border-color: rgba(56, 189, 248, 0.3);
+  background: rgba(14, 165, 233, 0.11);
+  color: #7dd3fc;
+}
+
 .profile-subscription-details {
   margin-top: 14px;
 }
@@ -2495,15 +2509,27 @@ body {
 }
 
 .patch-access-hint {
+  width: 100%;
   margin: 0;
   padding: 10px 12px;
   border: 1px solid rgba(244, 114, 182, .18);
   border-radius: 10px;
   background: rgba(244, 63, 94, .07);
   color: #f0abfc;
+  font: inherit;
   font-size: 11px;
   line-height: 1.55;
   text-align: center;
+  cursor: pointer;
+  transition: border-color .2s ease, background .2s ease, transform .2s ease;
+}
+
+.patch-access-hint:hover,
+.patch-access-hint:focus-visible {
+  border-color: rgba(192, 132, 252, .55);
+  background: rgba(168, 85, 247, .13);
+  transform: translateY(-1px);
+  outline: none;
 }
 
 .patch-access-hint[hidden] {

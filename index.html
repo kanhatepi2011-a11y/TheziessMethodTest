@@ -247,8 +247,8 @@
             </h2>
 
             <p>
-              Login ជាមួយ Telegram ហើយជ្រើសរើស PRO, PREMIUM ឬ MAX។
-              បើគ្មានគម្រោងសកម្ម ប៊ូតុង Compress នឹងត្រូវបានបិទ។ KHQR នៅទីនេះគឺ Demo ប៉ុណ្ណោះ។
+              Login ជាមួយ Telegram ហើយជ្រើសរើស FREE 3 DAYS, PRO, PREMIUM ឬ MAX។
+              បើគ្មានគម្រោងសកម្ម ប៊ូតុង Compress នឹងត្រូវបានបិទ។ FREE trial ប្រើបានម្តងក្នុងមួយ Telegram account ហើយ KHQR នៅទីនេះគឺ Demo ប៉ុណ្ណោះ។
             </p>
           </div>
 
@@ -261,6 +261,24 @@
         </div>
 
         <div class="plan-grid">
+          <button
+            type="button"
+            class="plan-card plan-free"
+            data-plan="free"
+          >
+            <span class="plan-chip plan-chip-free">
+              3-DAY TRIAL
+            </span>
+
+            <span class="plan-name">
+              FREE
+            </span>
+
+            <strong>$0</strong>
+
+            <small>3 days · one time</small>
+          </button>
+
           <button
             type="button"
             class="plan-card"
@@ -374,9 +392,14 @@
               </button>
             </div>
 
-            <p class="patch-access-hint" id="patchAccessHint" role="status">
+            <button
+              type="button"
+              class="patch-access-hint"
+              id="patchAccessHint"
+              data-action="login"
+            >
               Login with Telegram, then activate a subscription plan to compress videos.
-            </p>
+            </button>
 
             <a
               class="btn btn-tiktok"
@@ -934,7 +957,7 @@
           </div>
 
           <p id="profilePlanDescription">
-            Choose PRO, PREMIUM, or MAX to unlock video compression.
+            Choose the FREE 3-day trial, PRO, PREMIUM, or MAX to unlock video compression.
           </p>
         </section>
       </div>
@@ -1007,8 +1030,8 @@
         </button>
       </div>
 
-      <div class="modal-body payment-body">
-        <div class="khqr-card">
+      <div class="modal-body payment-body" id="paymentBody">
+        <div class="khqr-card" id="khqrCard">
           <div class="khqr-top">
             <strong>KHQR</strong>
             <span>DEMO ONLY</span>
@@ -1051,7 +1074,7 @@
           </div>
         </div>
 
-        <div class="demo-warning">
+        <div class="demo-warning" id="paymentNotice">
           <i
             class="ri-information-fill"
             aria-hidden="true"
@@ -1115,7 +1138,7 @@
 
   <script
     type="module"
-    src="app.js?v=20260727-subscription-gate"
+    src="app.js?v=20260727-free-trial"
   ></script>
 </body>
 </html>

@@ -117,6 +117,7 @@ let currentSubscription = null;
 let pendingPlan = null;
 
 const PLANS = {
+    free: { id: "free", name: "FREE", price: "$0", durationLabel: "3 days", days: 3 },
     pro: { id: "pro", name: "PRO", price: "$2", durationLabel: "30 days", days: 30 },
     premium: { id: "premium", name: "PREMIUM", price: "$5", durationLabel: "120 days", days: 120 },
     max: { id: "max", name: "MAX", price: "$10", durationLabel: "Unlimited", days: null },
@@ -246,8 +247,12 @@ function updateTelegramProfileUI(loggedIn, active) {
     if (navProfileDot) navProfileDot.hidden = !loggedIn;
 
     if (active && plan) {
+        const isFreeTrial = currentSubscription.planId === "free";
         setElementText("profilePlanName", plan.name);
-        setElementText("profilePlanBadge", "Premium active");
+        setElementText(
+            "profilePlanBadge",
+            isFreeTrial ? "Free trial active" : "Subscription active",
+        );
         setElementText("profilePlanStatus", "Active");
         setElementText(
             "profilePlanExpiry",
@@ -257,9 +262,12 @@ function updateTelegramProfileUI(loggedIn, active) {
         );
         setElementText(
             "profilePlanDescription",
-            `${plan.name} is active. Payment method: ${currentSubscription.paymentMethod || "KHQR"}.`,
+            isFreeTrial
+                ? "Your one-time 3-day free trial is active."
+                : `${plan.name} is active. Payment method: ${currentSubscription.paymentMethod || "KHQR"}.`,
         );
-        profilePlanBadge?.classList.add("premium");
+        profilePlanBadge?.classList.toggle("premium", !isFreeTrial);
+        profilePlanBadge?.classList.toggle("trial", isFreeTrial);
     } else if (loggedIn) {
         setElementText("profilePlanName", "NO PLAN");
         setElementText("profilePlanBadge", "Subscription required");
@@ -267,9 +275,9 @@ function updateTelegramProfileUI(loggedIn, active) {
         setElementText("profilePlanExpiry", "—");
         setElementText(
             "profilePlanDescription",
-            "Choose PRO, PREMIUM, or MAX to unlock video compression.",
+            "Choose the FREE 3-day trial, PRO, PREMIUM, or MAX to unlock video compression.",
         );
-        profilePlanBadge?.classList.remove("premium");
+        profilePlanBadge?.classList.remove("premium", "trial");
     } else {
         setElementText("profilePlanName", "NOT CONNECTED");
         setElementText("profilePlanBadge", "Login required");
@@ -279,7 +287,7 @@ function updateTelegramProfileUI(loggedIn, active) {
             "profilePlanDescription",
             "Connect your Telegram account to unlock the video compressor and view subscription details.",
         );
-        profilePlanBadge?.classList.remove("premium");
+        profilePlanBadge?.classList.remove("premium", "trial");
     }
 
     const profileLoginBtn = document.getElementById("profileLoginBtn");
@@ -292,6 +300,41 @@ function updateTelegramProfileUI(loggedIn, active) {
 
 function openModal(id) { document.getElementById(id)?.classList.add("active"); }
 function closeModal(id) { document.getElementById(id)?.classList.remove("active"); }
+
+function configurePlanActivationModal(plan) {
+    const isFreeTrial = plan?.id === "free";
+    const paymentBody = document.getElementById("paymentBody");
+    const khqrCard = document.getElementById("khqrCard");
+    const paymentNotice = document.getElementById("paymentNotice");
+    const confirmButton = document.getElementById("confirmPaymentBtn");
+
+    setElementText(
+        "paymentModalTitle",
+        isFreeTrial ? "Activate 3-Day Free Trial" : "KHQR Demo Payment",
+    );
+    setElementText("paymentAmount", plan?.price || "$0");
+    setElementText("paymentPlanName", plan?.name || "—");
+    setElementText("paymentDuration", plan?.durationLabel || "—");
+
+    paymentBody?.classList.toggle("free-trial-mode", isFreeTrial);
+    if (khqrCard) khqrCard.hidden = isFreeTrial;
+    if (paymentNotice) {
+        paymentNotice.classList.remove("error");
+        paymentNotice.textContent = isFreeTrial
+            ? "This free trial can be activated once per Telegram account. The 3-day period starts immediately after confirmation."
+            : "នេះជា Demo KHQR មិនទទួលប្រាក់ពិតទេ។ ចុច “Confirm Demo Payment” ដើម្បី Activate plan សាកល្បង។";
+    }
+    if (confirmButton) {
+        confirmButton.textContent = isFreeTrial
+            ? "Start 3-Day Free Trial"
+            : "Confirm Demo Payment";
+    }
+}
+
+function showSubscriptionPlans() {
+    closeModal("profileModal");
+    focusNavigationSection(document.getElementById("subscriptionPanel"));
+}
 
 function updateAccessUI() {
     const loggedIn = !!currentUser;
@@ -314,7 +357,19 @@ function updateAccessUI() {
         subscriptionStatus.classList.toggle("connected", false);
         subscriptionStatus.classList.toggle("required", loggedIn && !active);
     }
-    document.querySelectorAll(".plan-card").forEach((card) => card.classList.toggle("current", active && card.dataset.plan === currentSubscription?.planId));
+    document.querySelectorAll(".plan-card").forEach((card) => {
+        const isCurrent = active && card.dataset.plan === currentSubscription?.planId;
+        const freeBlockedByActivePlan = active && card.dataset.plan === "free";
+        card.classList.toggle("current", isCurrent);
+        card.disabled = freeBlockedByActivePlan;
+        if (freeBlockedByActivePlan) {
+            card.title = isCurrent
+                ? "Your free trial is already active."
+                : "You already have an active subscription.";
+        } else {
+            card.removeAttribute("title");
+        }
+    });
 
     // Telegram login unlocks the account area, but video compression requires
     // a currently active subscription. The full-page lock remains login-only.
@@ -336,7 +391,7 @@ function requireActiveSubscription({ focusPlans = true } = {}) {
     if (hasActiveSubscription()) return true;
 
     logMessage(
-        "An active subscription is required before you can compress videos.",
+        "Choose the FREE 3-day trial or an active paid plan before compressing videos.",
         "warning",
     );
 
@@ -457,7 +512,7 @@ async function initializeMembership() {
     // cancels Telegram login. Re-enable the button in that case.
     window.addEventListener("pageshow", resetTelegramLoginButton);
 
-    document.getElementById("openPlansBtn")?.addEventListener("click", () => document.getElementById("subscriptionPanel")?.scrollIntoView({ behavior: "smooth" }));
+    document.getElementById("openPlansBtn")?.addEventListener("click", showSubscriptionPlans);
     document.getElementById("logoutBtn")?.addEventListener("click", async () => {
         try {
             await fetch("/api/auth/logout", {
@@ -478,9 +533,8 @@ async function initializeMembership() {
     document.querySelectorAll(".plan-card").forEach((card) => card.addEventListener("click", () => {
         if (!currentUser) { openModal("telegramModal"); return; }
         pendingPlan = PLANS[card.dataset.plan];
-        document.getElementById("paymentAmount").textContent = pendingPlan.price;
-        document.getElementById("paymentPlanName").textContent = pendingPlan.name;
-        document.getElementById("paymentDuration").textContent = pendingPlan.durationLabel;
+        if (!pendingPlan) return;
+        configurePlanActivationModal(pendingPlan);
         openModal("paymentModal");
     }));
     document.getElementById("confirmPaymentBtn")?.addEventListener("click", async () => {
@@ -496,15 +550,34 @@ async function initializeMembership() {
             });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || "Demo activation failed");
+            const activatedPlan = pendingPlan;
             currentSubscription = data.subscription;
+            pendingPlan = null;
             closeModal("paymentModal");
-            logMessage(`${pendingPlan.name} subscription activated (KHQR demo).`, "success");
+            logMessage(
+                activatedPlan.id === "free"
+                    ? "Your 3-day free trial is now active."
+                    : `${activatedPlan.name} subscription activated (KHQR demo).`,
+                "success",
+            );
             updateAccessUI();
         } catch (error) {
+            const paymentNotice = document.getElementById("paymentNotice");
+            if (paymentNotice) {
+                paymentNotice.textContent = error.message;
+                paymentNotice.classList.add("error");
+            }
             logMessage(error.message, "error");
         } finally {
             button.disabled = false;
         }
+    });
+    document.getElementById("patchAccessHint")?.addEventListener("click", () => {
+        if (!currentUser) {
+            openModal("telegramModal");
+            return;
+        }
+        showSubscriptionPlans();
     });
     document.getElementById("lockActionBtn")?.addEventListener("click", () => openModal("telegramModal"));
     updateAccessUI();
@@ -995,7 +1068,8 @@ function updatePatchButton() {
         if (label) label.textContent = "Login Required";
         if (hint) {
             hint.hidden = false;
-            hint.textContent = "Login with Telegram, then activate a subscription plan to compress videos.";
+            hint.textContent = "Login with Telegram, then choose the FREE 3-day trial or a paid plan.";
+            hint.dataset.action = "login";
         }
         return;
     }
@@ -1003,11 +1077,12 @@ function updatePatchButton() {
     if (!hasActiveSubscription()) {
         patchBtn.disabled = true;
         patchBtn.dataset.accessState = "subscription-required";
-        patchBtn.title = "Activate PRO, PREMIUM, or MAX to unlock video compression.";
+        patchBtn.title = "Activate FREE, PRO, PREMIUM, or MAX to unlock video compression.";
         if (label) label.textContent = "Subscription Required";
         if (hint) {
             hint.hidden = false;
-            hint.textContent = "No active subscription. Choose PRO, PREMIUM, or MAX above to unlock compression.";
+            hint.textContent = "No active subscription. Click here to view FREE, PRO, PREMIUM, or MAX plans.";
+            hint.dataset.action = "plans";
         }
         return;
     }

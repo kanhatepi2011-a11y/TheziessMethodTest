@@ -50,7 +50,7 @@ export async function ensureSchema() {
         id BIGSERIAL PRIMARY KEY,
         user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         plan_id TEXT NOT NULL CHECK (
-          plan_id IN ('pro', 'premium', 'max')
+          plan_id IN ('free', 'pro', 'premium', 'max')
         ),
         status TEXT NOT NULL DEFAULT 'active' CHECK (
           status IN ('active', 'expired', 'cancelled')
@@ -61,6 +61,33 @@ export async function ensureSchema() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'subscriptions_plan_id_check'
+            AND conrelid = 'subscriptions'::regclass
+            AND pg_get_constraintdef(oid) NOT LIKE '%free%'
+        ) THEN
+          ALTER TABLE subscriptions
+            DROP CONSTRAINT subscriptions_plan_id_check;
+          ALTER TABLE subscriptions
+            ADD CONSTRAINT subscriptions_plan_id_check
+            CHECK (plan_id IN ('free', 'pro', 'premium', 'max'));
+        ELSIF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'subscriptions_plan_id_check'
+            AND conrelid = 'subscriptions'::regclass
+        ) THEN
+          ALTER TABLE subscriptions
+            ADD CONSTRAINT subscriptions_plan_id_check
+            CHECK (plan_id IN ('free', 'pro', 'premium', 'max'));
+        END IF;
+      END;
+      $$;
 
       CREATE TABLE IF NOT EXISTS payments (
         id BIGSERIAL PRIMARY KEY,
@@ -75,11 +102,58 @@ export async function ensureSchema() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
 
+      ALTER TABLE payments
+        ADD COLUMN IF NOT EXISTS amount NUMERIC(10, 2);
+
+      ALTER TABLE payments
+        ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'USD';
+
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = current_schema()
+            AND table_name = 'payments'
+            AND column_name = 'amount_usd'
+        ) THEN
+          EXECUTE 'UPDATE payments SET amount = amount_usd WHERE amount IS NULL';
+          ALTER TABLE payments
+            ALTER COLUMN amount_usd DROP NOT NULL;
+        END IF;
+
+        UPDATE payments
+        SET amount = 0
+        WHERE amount IS NULL;
+
+        ALTER TABLE payments
+          ALTER COLUMN amount SET NOT NULL;
+
+        IF EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'payments_plan_id_check'
+            AND conrelid = 'payments'::regclass
+            AND pg_get_constraintdef(oid) NOT LIKE '%free%'
+        ) THEN
+          ALTER TABLE payments
+            DROP CONSTRAINT payments_plan_id_check;
+          ALTER TABLE payments
+            ADD CONSTRAINT payments_plan_id_check
+            CHECK (plan_id IN ('free', 'pro', 'premium', 'max'));
+        END IF;
+      END;
+      $$;
+
       CREATE INDEX IF NOT EXISTS subscriptions_user_id_index
       ON subscriptions(user_id);
 
       CREATE INDEX IF NOT EXISTS subscriptions_status_index
       ON subscriptions(status);
+
+      CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_one_free_trial_per_user
+      ON subscriptions(user_id)
+      WHERE plan_id = 'free';
 
       CREATE INDEX IF NOT EXISTS payments_user_id_index
       ON payments(user_id);
@@ -182,6 +256,23 @@ export async function findActiveSubscription(userId) {
   return result.rows[0] || null;
 }
 
+export async function hasUsedFreeTrial(userId) {
+  await ensureSchema();
+
+  const result = await pool.query(
+    `
+      SELECT 1
+      FROM subscriptions
+      WHERE user_id = $1
+        AND plan_id = 'free'
+      LIMIT 1
+    `,
+    [userId],
+  );
+
+  return Boolean(result.rows[0]);
+}
+
 export async function activateSubscription({
   userId,
   planId,
@@ -190,6 +281,10 @@ export async function activateSubscription({
   await ensureSchema();
 
   const plans = {
+    free: {
+      amount: 0,
+      days: 3,
+    },
     pro: {
       amount: 2,
       days: 30,
