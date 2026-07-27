@@ -2555,3 +2555,20 @@ body {
   background: rgba(244, 63, 94, .1);
   color: #f9a8d4;
 }
+
+
+/* V7: dedicated History tab */
+body[data-app-view="history"] .container {
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+}
+
+body[data-app-view="history"] #historySection {
+  width: 100%;
+  margin: 0;
+}
+
+body[data-app-view="history"] #historySection .history-drawer {
+  max-height: none;
+  overflow: visible;
+}

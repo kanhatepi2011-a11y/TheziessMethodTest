@@ -105,6 +105,8 @@ const historyBadge = document.getElementById("historyBadge");
 const historyHeader = document.getElementById("historyHeader");
 const historySection = document.getElementById("historySection");
 const clearHistoryBtn = document.getElementById("clearHistoryBtn");
+const queueAndActionsWrapper = document.querySelector(".queue-and-actions-wrapper");
+const systemStatusPanel = document.querySelector(".panel-log");
 
 let selectedFiles = [];
 let currentFlowState = "idle";
@@ -752,6 +754,28 @@ function setHistorySectionVisible(visible) {
     }
 }
 
+function setPrimaryAppView(view) {
+    const historyOnly = view === "history";
+
+    // History is a real standalone tab. Hide every compressor-only block so
+    // the History screen contains only saved output videos and its controls.
+    if (dropZone) {
+        dropZone.hidden = historyOnly;
+        dropZone.setAttribute("aria-hidden", String(historyOnly));
+    }
+    if (queueAndActionsWrapper) {
+        queueAndActionsWrapper.hidden = historyOnly;
+        queueAndActionsWrapper.setAttribute("aria-hidden", String(historyOnly));
+    }
+    if (systemStatusPanel) {
+        systemStatusPanel.hidden = historyOnly;
+        systemStatusPanel.setAttribute("aria-hidden", String(historyOnly));
+    }
+
+    setHistorySectionVisible(historyOnly);
+    document.body.dataset.appView = historyOnly ? "history" : "compress";
+}
+
 function initializeBottomNavigation() {
     const compressButton = document.getElementById("navCompressBtn");
     const historyButton = document.getElementById("navHistoryBtn");
@@ -760,7 +784,7 @@ function initializeBottomNavigation() {
 
     compressButton?.addEventListener("click", () => {
         if (!requireLogin()) return;
-        setHistorySectionVisible(false);
+        setPrimaryAppView("compress");
         setActiveNavigation("compress");
         focusNavigationSection(dropZone);
     });
@@ -768,7 +792,7 @@ function initializeBottomNavigation() {
     historyButton?.addEventListener("click", async () => {
         if (!requireLogin()) return;
         await renderHistoryList();
-        setHistorySectionVisible(true);
+        setPrimaryAppView("history");
         const historyContainer = historyHeader?.parentElement;
         historyContainer?.classList.remove("collapsed");
         document.getElementById("historyToggleBtn")?.setAttribute("aria-expanded", "true");
@@ -789,13 +813,15 @@ function initializeBottomNavigation() {
 
     document.getElementById("profilePlansBtn")?.addEventListener("click", () => {
         closeModal("profileModal");
-        setActiveNavigation("profile");
+        setPrimaryAppView("compress");
+        setActiveNavigation("compress");
         showSubscriptionPlans();
     });
 
     document.getElementById("profileLogoutBtn")?.addEventListener("click", () => {
         closeModal("profileModal");
         document.getElementById("logoutBtn")?.click();
+        setPrimaryAppView("compress");
         setActiveNavigation("compress");
     });
 
@@ -805,7 +831,7 @@ function initializeBottomNavigation() {
         }
     });
 
-    setHistorySectionVisible(false);
+    setPrimaryAppView("compress");
     setActiveNavigation("compress");
 }
 
