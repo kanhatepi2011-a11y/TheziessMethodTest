@@ -946,11 +946,11 @@ function renderTikTokVideoResult(payload) {
     setElementText("videoCheckFps", formatCheckedFps(video.fps));
     const fpsSource = document.getElementById("videoCheckFpsSource");
     if (fpsSource) {
-        if (video.fpsSource === "caption_claim") {
-            fpsSource.textContent = "Claimed in caption";
-            fpsSource.hidden = false;
-        } else if (video.fpsExact && video.fps) {
+        if (video.fpsSource === "mp4" && video.fps) {
             fpsSource.textContent = "Detected from video";
+            fpsSource.hidden = false;
+        } else if (video.fpsSource === "tiktok_metadata" && video.fps) {
+            fpsSource.textContent = "TikTok metadata";
             fpsSource.hidden = false;
         } else {
             fpsSource.textContent = "";
@@ -1083,12 +1083,7 @@ function initializeTikTokVideoChecker() {
                 .filter(([, available]) => !available)
                 .map(([name]) => name);
 
-            if (data.video?.fpsSource === "caption_claim") {
-                setVideoCheckStatus(
-                    `Video checked. ${formatCheckedFps(data.video.fps)} was claimed in the caption; TikTok did not expose the encoded FPS.`,
-                    "warning",
-                );
-            } else if (missing.length > 0) {
+            if (missing.length > 0) {
                 setVideoCheckStatus(
                     `Video checked. TikTok did not expose: ${missing.join(", ")}.`,
                     "warning",

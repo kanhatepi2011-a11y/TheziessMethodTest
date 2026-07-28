@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractClaimedFps, extractTikTokDataFromHtml } from "../api/tiktok/check.js";
+import { extractTikTokDataFromHtml } from "../api/tiktok/check.js";
 
 describe("TikTok video checker metadata parser", () => {
   it("extracts resolution, bitrate, fps, duration and size", () => {
@@ -47,16 +47,31 @@ describe("TikTok video checker metadata parser", () => {
     expect(result.duration).toBe(15);
     expect(result.fileSize).toBe(2718750);
   });
-});
+  it("ignores FPS values written only in the caption", () => {
+    const state = {
+      __DEFAULT_SCOPE__: {
+        "webapp.video-detail": {
+          itemInfo: {
+            itemStruct: {
+              id: "9876543210987654321",
+              desc: "Test 600Fpa #120fps #6000fps",
+              author: { uniqueId: "captiononly" },
+              video: { width: 1080, height: 1920, duration: 18 },
+            },
+          },
+        },
+      },
+    };
 
+    const html = `<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">${JSON.stringify(state)}</script>`;
+    const result = extractTikTokDataFromHtml(
+      html,
+      "https://www.tiktok.com/@captiononly/video/9876543210987654321",
+    );
 
-describe("TikTok FPS caption fallback", () => {
-  it("reads an explicit FPS hashtag before a typo-like FPA value", () => {
-    expect(extractClaimedFps("Test 600Fpa 😀 #120fps")).toBe(120);
+    expect(result.fps).toBeNull();
+    expect(result).not.toHaveProperty("claimedFps");
   });
 
-  it("supports high claimed frame-rate values without forcing a common preset", () => {
-    expect(extractClaimedFps("Experimental render #1200fps")).toBe(1200);
-    expect(extractClaimedFps("Test clip 6000 FPS")).toBe(6000);
-  });
 });
+

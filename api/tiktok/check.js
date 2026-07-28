@@ -369,32 +369,6 @@ function normalizeFpsValue(...values) {
   return null;
 }
 
-export function extractClaimedFps(...values) {
-  const text = values
-    .filter((value) => typeof value === "string" && value.trim())
-    .join(" ");
-  if (!text) return null;
-
-  // Prefer an explicit #120fps-style hashtag over looser caption text.
-  const patterns = [
-    /#\s*(\d+(?:\.\d+)?)\s*fps\b/gi,
-    /\b(\d+(?:\.\d+)?)\s*fps\b/gi,
-    /\b(\d+(?:\.\d+)?)\s*frames?\s*(?:\/|per)\s*second\b/gi,
-    // Accept the common "FPA" typo only when no real FPS expression exists.
-    /\b(\d+(?:\.\d+)?)\s*fpa\b/gi,
-  ];
-
-  for (const pattern of patterns) {
-    let match;
-    while ((match = pattern.exec(text)) !== null) {
-      const fps = normalizeFpsValue(match[1]);
-      if (fps) return fps;
-    }
-  }
-
-  return null;
-}
-
 function chooseBitrateEntry(video) {
   const entries = video?.bitrateInfo || video?.bitrate_info || video?.bitRateInfo;
   if (!Array.isArray(entries) || entries.length === 0) return null;
@@ -462,7 +436,6 @@ function extractVideoData(item, html, finalUrl) {
     ),
     fps: metadataFps,
     fpsSource: metadataFps ? "tiktok_metadata" : null,
-    claimedFps: extractClaimedFps(title),
     frameCount: toFiniteNumber(
       video.frameCount,
       video.frame_count,
@@ -1088,7 +1061,6 @@ export default async function handler(req, res) {
         duration: null,
         fps: null,
         fpsSource: null,
-        claimedFps: extractClaimedFps(oEmbed.title),
         frameCount: null,
         bitrate: null,
         fileSize: null,
@@ -1118,20 +1090,14 @@ export default async function handler(req, res) {
       pageData.fps,
       fpsFromFrameCount,
     );
-    const claimedFps = extractClaimedFps(
-      pageData.title,
-      oEmbed?.title,
-    ) || normalizeFpsValue(pageData.claimedFps);
-    const fps = detectedFps || claimedFps;
+    const fps = detectedFps;
     const fpsSource = detectedFps
       ? (probe.metadata?.fps ? "mp4" : pageData.fpsSource || "tiktok_metadata")
-      : claimedFps
-        ? "caption_claim"
-        : null;
+      : null;
 
-    const fpsNote = fpsSource === "caption_claim"
-      ? `TikTok did not expose the encoded FPS. ${fps} FPS was read from the caption/hashtag, so it is a claimed value and may differ from the actual file.`
-      : "TikTok can hide the original media stream for private, restricted or protected posts. Missing values are shown as unavailable instead of being guessed.";
+    const fpsNote = detectedFps
+      ? "FPS was read from the TikTok video stream or TikTok's technical metadata. Captions and hashtags are never used."
+      : "TikTok did not expose verifiable FPS metadata for this video. FPS is shown as unavailable instead of being guessed from captions or hashtags.";
 
     return res.status(200).json({
       ok: true,
@@ -1149,7 +1115,7 @@ export default async function handler(req, res) {
         bitrate: bitrate ? Math.round(bitrate) : null,
         fps: fps || null,
         fpsSource,
-        fpsExact: Boolean(detectedFps),
+        fpsExact: Boolean(probe.metadata?.fps),
         duration: duration || null,
         fileSize: fileSize ? Math.round(fileSize) : null,
         codec: probe.metadata?.codec || pageData.codec || null,
