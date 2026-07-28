@@ -952,6 +952,9 @@ function renderTikTokVideoResult(payload) {
         } else if (video.fpsSource === "tiktok_metadata" && video.fps) {
             fpsSource.textContent = "TikTok metadata";
             fpsSource.hidden = false;
+        } else if (video.fpsSource === "bitrate_estimate" && video.fps) {
+            fpsSource.textContent = "Estimated from bitrate";
+            fpsSource.hidden = false;
         } else {
             fpsSource.textContent = "";
             fpsSource.hidden = true;

@@ -1090,14 +1090,26 @@ export default async function handler(req, res) {
       pageData.fps,
       fpsFromFrameCount,
     );
-    const fps = detectedFps;
+
+    // Fallback requested by the product owner: estimate FPS from bitrate only
+    // when TikTok does not expose an actual frame rate. This is deliberately
+    // labelled as an estimate because bitrate alone cannot prove real FPS.
+    const estimatedFpsFromBitrate = !detectedFps && bitrate
+      ? (bitrate < 2_000_000 ? 30 : bitrate >= 16_000_000 ? 600 : 60)
+      : null;
+
+    const fps = detectedFps || estimatedFpsFromBitrate;
     const fpsSource = detectedFps
       ? (probe.metadata?.fps ? "mp4" : pageData.fpsSource || "tiktok_metadata")
-      : null;
+      : estimatedFpsFromBitrate
+        ? "bitrate_estimate"
+        : null;
 
     const fpsNote = detectedFps
       ? "FPS was read from the TikTok video stream or TikTok's technical metadata. Captions and hashtags are never used."
-      : "TikTok did not expose verifiable FPS metadata for this video. FPS is shown as unavailable instead of being guessed from captions or hashtags.";
+      : estimatedFpsFromBitrate
+        ? "TikTok did not expose real FPS metadata, so FPS was estimated from bitrate: under 2 Mbps = 30 FPS, 2 to under 16 Mbps = 60 FPS, and 16 Mbps or higher = 600 FPS."
+        : "TikTok did not expose verifiable FPS or bitrate metadata for this video.";
 
     return res.status(200).json({
       ok: true,
@@ -1115,7 +1127,7 @@ export default async function handler(req, res) {
         bitrate: bitrate ? Math.round(bitrate) : null,
         fps: fps || null,
         fpsSource,
-        fpsExact: Boolean(probe.metadata?.fps),
+        fpsExact: Boolean(detectedFps),
         duration: duration || null,
         fileSize: fileSize ? Math.round(fileSize) : null,
         codec: probe.metadata?.codec || pageData.codec || null,
