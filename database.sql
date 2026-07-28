@@ -1,6 +1,6 @@
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE IF NOT EXISTS theziess_users_v2 (
   id BIGSERIAL PRIMARY KEY,
-  telegram_id BIGINT UNIQUE NOT NULL,
+  telegram_id TEXT UNIQUE NOT NULL,
   username VARCHAR(100),
   first_name VARCHAR(120) NOT NULL,
   last_name VARCHAR(120),

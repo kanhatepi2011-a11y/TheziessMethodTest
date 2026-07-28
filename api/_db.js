@@ -29,13 +29,85 @@ export function getPool() {
   return pool;
 }
 
+const USERS_TABLE = "theziess_users_v2";
 const SUBSCRIPTIONS_TABLE = "theziess_subscriptions_v5";
 const FREE_TRIALS_TABLE = "theziess_free_trials_v5";
 const PAYMENTS_TABLE = "theziess_payments_v5";
 const COMPRESSION_EVENTS_TABLE = "theziess_compression_events_v1";
 
 let schemaPromise;
+let userMigrationPromise;
 let paidPlanMigrationPromise;
+
+/**
+ * Copy legacy users into the versioned table when possible. The old `users`
+ * table may define telegram_id as INTEGER, which overflows for newer Telegram
+ * account IDs and raises PostgreSQL 22003 during login. The new table stores
+ * Telegram IDs as TEXT so every valid Telegram ID is accepted safely.
+ *
+ * Migration is best-effort and never blocks authentication. Existing numeric
+ * user IDs are preserved when the legacy schema is compatible, keeping old
+ * subscription user_key values connected to the same account.
+ */
+async function migrateLegacyUsersSafely() {
+  if (!userMigrationPromise) {
+    userMigrationPromise = (async () => {
+      const legacy = await pool.query(
+        "SELECT to_regclass('public.users') AS legacy_users",
+      );
+
+      if (!legacy.rows[0]?.legacy_users) return false;
+
+      await pool.query(`
+        INSERT INTO ${USERS_TABLE} (
+          id,
+          telegram_id,
+          username,
+          first_name,
+          last_name,
+          photo_url,
+          created_at,
+          updated_at,
+          last_login_at
+        )
+        SELECT
+          legacy_user.id::BIGINT,
+          legacy_user.telegram_id::TEXT,
+          NULLIF(to_jsonb(legacy_user)->>'username', ''),
+          COALESCE(
+            NULLIF(to_jsonb(legacy_user)->>'first_name', ''),
+            'Telegram User'
+          ),
+          NULLIF(to_jsonb(legacy_user)->>'last_name', ''),
+          NULLIF(to_jsonb(legacy_user)->>'photo_url', ''),
+          NOW(),
+          NOW(),
+          NOW()
+        FROM users AS legacy_user
+        WHERE legacy_user.telegram_id IS NOT NULL
+        ON CONFLICT DO NOTHING
+      `);
+
+      await pool.query(`
+        SELECT setval(
+          pg_get_serial_sequence('${USERS_TABLE}', 'id'),
+          COALESCE((SELECT MAX(id) FROM ${USERS_TABLE}), 1),
+          EXISTS(SELECT 1 FROM ${USERS_TABLE})
+        )
+      `);
+
+      return true;
+    })().catch((error) => {
+      console.warn("Legacy user migration skipped:", {
+        code: error?.code || "UNKNOWN",
+        message: error?.message || String(error),
+      });
+      return false;
+    });
+  }
+
+  return userMigrationPromise;
+}
 
 /**
  * Upgrade old paid subscriptions without making login depend on a DDL change.
@@ -96,9 +168,9 @@ export async function ensureSchema() {
   if (!schemaPromise) {
     schemaPromise = (async () => {
       await pool.query(`
-        CREATE TABLE IF NOT EXISTS users (
+        CREATE TABLE IF NOT EXISTS ${USERS_TABLE} (
           id BIGSERIAL PRIMARY KEY,
-          telegram_id BIGINT UNIQUE NOT NULL,
+          telegram_id TEXT UNIQUE NOT NULL,
           username VARCHAR(100),
           first_name VARCHAR(120) NOT NULL,
           last_name VARCHAR(120),
@@ -184,6 +256,9 @@ export async function ensureSchema() {
       `);
 
 
+      // Preserve compatible legacy accounts, but never let migration block login.
+      await migrateLegacyUsersSafely();
+
       // Never let a legacy paid-plan migration prevent Telegram login.
       await migratePaidPlanDurationsSafely();
     })().catch((error) => {
@@ -200,7 +275,7 @@ export async function upsertTelegramUser(telegramUser) {
 
   const result = await pool.query(
     `
-      INSERT INTO users (
+      INSERT INTO ${USERS_TABLE} (
         telegram_id,
         username,
         first_name,
@@ -238,7 +313,7 @@ export async function findUserById(userId) {
   const result = await pool.query(
     `
       SELECT *
-      FROM users
+      FROM ${USERS_TABLE}
       WHERE id::TEXT = $1::TEXT
       LIMIT 1
     `,
@@ -254,7 +329,7 @@ export async function findUserByTelegramId(telegramId) {
   const result = await pool.query(
     `
       SELECT *
-      FROM users
+      FROM ${USERS_TABLE}
       WHERE telegram_id::TEXT = $1::TEXT
       LIMIT 1
     `,
@@ -511,7 +586,7 @@ export async function activateSubscription({
     await client.query("BEGIN");
 
     const lockedUser = await client.query(
-      "SELECT id FROM users WHERE id::TEXT = $1::TEXT FOR UPDATE",
+      `SELECT id FROM ${USERS_TABLE} WHERE id::TEXT = $1::TEXT FOR UPDATE`,
       [String(userId)],
     );
 
@@ -654,7 +729,7 @@ export async function recordCompressionEvent({
         $4,
         $5,
         $6
-      FROM users
+      FROM ${USERS_TABLE}
       WHERE id::TEXT = $1::TEXT
       RETURNING *
     `,
@@ -715,8 +790,8 @@ export async function getAdminStats() {
 
   const result = await pool.query(`
     SELECT
-      (SELECT COUNT(*)::INTEGER FROM users) AS total_users,
-      (SELECT COUNT(*)::INTEGER FROM users WHERE last_login_at >= NOW() - INTERVAL '24 hours') AS users_last_24h,
+      (SELECT COUNT(*)::INTEGER FROM ${USERS_TABLE}) AS total_users,
+      (SELECT COUNT(*)::INTEGER FROM ${USERS_TABLE} WHERE last_login_at >= NOW() - INTERVAL '24 hours') AS users_last_24h,
       (SELECT COUNT(*)::INTEGER FROM ${SUBSCRIPTIONS_TABLE} WHERE status = 'active' AND expires_at > NOW()) AS active_paid,
       (SELECT COUNT(*)::INTEGER FROM ${FREE_TRIALS_TABLE} WHERE status = 'active' AND expires_at > NOW()) AS active_trials,
       (SELECT COUNT(*)::INTEGER FROM ${COMPRESSION_EVENTS_TABLE}) AS total_compressions,
@@ -736,7 +811,7 @@ export async function listAdminUsers({ page = 1, pageSize = 8 } = {}) {
   const offset = (safePage - 1) * safePageSize;
 
   const [countResult, usersResult] = await Promise.all([
-    pool.query("SELECT COUNT(*)::INTEGER AS total FROM users"),
+    pool.query(`SELECT COUNT(*)::INTEGER AS total FROM ${USERS_TABLE}`),
     pool.query(
       `
         SELECT
@@ -745,7 +820,7 @@ export async function listAdminUsers({ page = 1, pageSize = 8 } = {}) {
           active_access.status AS active_status,
           active_access.starts_at AS active_starts_at,
           active_access.expires_at AS active_expires_at
-        FROM users u
+        FROM ${USERS_TABLE} u
         ${ACTIVE_ACCESS_LATERAL}
         ORDER BY u.last_login_at DESC, u.id DESC
         LIMIT $1 OFFSET $2
@@ -776,7 +851,7 @@ export async function findAdminUser(lookup) {
         active_access.status AS active_status,
         active_access.starts_at AS active_starts_at,
         active_access.expires_at AS active_expires_at
-      FROM users u
+      FROM ${USERS_TABLE} u
       ${ACTIVE_ACCESS_LATERAL}
       WHERE u.telegram_id::TEXT = $1::TEXT
          OR u.id::TEXT = $1::TEXT
@@ -893,7 +968,7 @@ export async function listAdminActiveSubscriptions(limit = 12) {
         u.first_name,
         u.last_name
       FROM ${SUBSCRIPTIONS_TABLE} s
-      LEFT JOIN users u ON u.id::TEXT = s.user_key
+      LEFT JOIN ${USERS_TABLE} u ON u.id::TEXT = s.user_key
       WHERE s.status = 'active'
         AND s.expires_at > NOW()
       ORDER BY s.created_at DESC
@@ -917,7 +992,7 @@ export async function listAdminActiveTrials(limit = 12) {
         u.first_name,
         u.last_name
       FROM ${FREE_TRIALS_TABLE} t
-      LEFT JOIN users u ON u.id::TEXT = t.user_key
+      LEFT JOIN ${USERS_TABLE} u ON u.id::TEXT = t.user_key
       WHERE t.status = 'active'
         AND t.expires_at > NOW()
       ORDER BY t.expires_at ASC
@@ -941,7 +1016,7 @@ export async function listAdminRecentPayments(limit = 12) {
         u.first_name,
         u.last_name
       FROM ${PAYMENTS_TABLE} p
-      LEFT JOIN users u ON u.id::TEXT = p.user_key
+      LEFT JOIN ${USERS_TABLE} u ON u.id::TEXT = p.user_key
       ORDER BY p.created_at DESC, p.id DESC
       LIMIT $1
     `,

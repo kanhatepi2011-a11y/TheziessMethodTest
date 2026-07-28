@@ -13,6 +13,7 @@ export default async function handler(req, res) {
     const result = await getPool().query(`
       SELECT
         NOW() AS server_time,
+        to_regclass('theziess_users_v2') IS NOT NULL AS users_ready,
         to_regclass('theziess_free_trials_v5') IS NOT NULL AS free_trials_ready,
         to_regclass('theziess_subscriptions_v5') IS NOT NULL AS subscriptions_ready,
         to_regclass('theziess_payments_v5') IS NOT NULL AS payments_ready,
@@ -23,11 +24,12 @@ export default async function handler(req, res) {
       ok: true,
       database: "PostgreSQL",
       serverTime: result.rows[0].server_time,
+      usersReady: result.rows[0].users_ready,
       freeTrialsReady: result.rows[0].free_trials_ready,
       subscriptionsReady: result.rows[0].subscriptions_ready,
       paymentsReady: result.rows[0].payments_ready,
       compressionEventsReady: result.rows[0].compression_events_ready,
-      schemaVersion: "telegram-admin-bot-v1",
+      schemaVersion: "telegram-login-v14-text-telegram-id",
     });
   } catch (error) {
     console.error("Database status error:", {
