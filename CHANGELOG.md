@@ -171,3 +171,17 @@ All notable changes to the NoBlur project are documented in this file.
 - Added admin dashboard, user search, subscription, trial, payment and stats commands.
 - Added server-side compression metadata counters without uploading video files.
 - Added admin-only access using `TELEGRAM_ADMIN_IDS`.
+
+## 2.9.0 — Telegram-admin paid subscriptions
+- Blocked public self-activation of PRO, PREMIUM, and MAX.
+- Added admin-only `/grant`, `/revoke`, and `/plans` Telegram commands.
+- Added Grant/Revoke buttons to Telegram user details.
+- Marked paid plan cards as ADMIN ONLY and replaced demo-payment activation with status checking.
+- Added automatic membership refresh when users return to the website.
+
+## V12 — Paid plan duration correction
+
+- PRO remains 30 days.
+- PREMIUM changed from 120 to 180 days.
+- MAX changed from unlimited to one year (365 days).
+- Migrates existing paid subscriptions and enforces expiration for every paid plan.

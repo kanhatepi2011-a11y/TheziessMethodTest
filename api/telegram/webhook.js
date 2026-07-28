@@ -95,7 +95,7 @@ function planLabel(planId) {
 }
 
 function remainingLabel(expiresAt) {
-  if (!expiresAt) return "Unlimited";
+  if (!expiresAt) return "No expiry date";
   const milliseconds = new Date(expiresAt).getTime() - Date.now();
   if (milliseconds <= 0) return "Expired";
 
@@ -115,6 +115,9 @@ function dashboardKeyboard() {
       [
         { text: "💎 Subscriptions", callback_data: "admin:subscriptions" },
         { text: "🆓 Trials", callback_data: "admin:trials" },
+      ],
+      [
+        { text: "➕ Add Subscription", callback_data: "admin:grant:help" },
       ],
       [{ text: "💳 Payments", callback_data: "admin:payments" }],
     ],
@@ -285,9 +288,187 @@ async function sendUserDetails(chatId, lookup) {
 
   await sendTelegramMessage(chatId, lines.join("\n"), {
     reply_markup: {
-      inline_keyboard: [[{ text: "🏠 Admin", callback_data: "admin:home" }]],
+      inline_keyboard: [
+        [
+          { text: "⚡ Grant PRO", callback_data: `admin:grant:${user.id}:pro` },
+          { text: "💎 Grant PREMIUM", callback_data: `admin:grant:${user.id}:premium` },
+        ],
+        [{ text: "👑 Grant MAX", callback_data: `admin:grant:${user.id}:max` }],
+        [
+          { text: "🚫 Revoke paid plan", callback_data: `admin:revoke:${user.id}` },
+          { text: "🏠 Admin", callback_data: "admin:home" },
+        ],
+      ],
     },
   });
+}
+
+async function sendGrantHelp(chatId) {
+  await sendTelegramMessage(
+    chatId,
+    [
+      "<b>➕ Add a paid subscription</b>",
+      "",
+      "Paid plans cannot be claimed from the website. Only a configured Telegram admin can assign them.",
+      "",
+      "<b>Commands</b>",
+      "<code>/grant TELEGRAM_ID pro</code>",
+      "<code>/grant TELEGRAM_ID premium</code>",
+      "<code>/grant TELEGRAM_ID max</code>",
+      "<code>/grant @username pro</code>",
+      "",
+      "<b>Plan durations</b>",
+      "PRO: 30 days",
+      "PREMIUM: 180 days",
+      "MAX: 1 year (365 days)",
+      "",
+      "You can also open <code>/user TELEGRAM_ID</code> and tap a Grant button.",
+      "",
+      "To remove a paid plan: <code>/revoke TELEGRAM_ID</code>",
+    ].join("\n"),
+    {
+      reply_markup: {
+        inline_keyboard: [[{ text: "🏠 Admin", callback_data: "admin:home" }]],
+      },
+    },
+  );
+}
+
+async function grantPlanToUser(chatId, lookup, planId, adminTelegramId) {
+  const normalizedPlan = String(planId || "").trim().toLowerCase();
+  const allowedPlans = new Set(["pro", "premium", "max"]);
+
+  if (!lookup || !allowedPlans.has(normalizedPlan)) {
+    await sendTelegramMessage(
+      chatId,
+      "Usage: <code>/grant TELEGRAM_ID pro</code>, <code>premium</code>, or <code>max</code>.",
+    );
+    return;
+  }
+
+  try {
+    const { grantAdminSubscription } = await getDatabaseModule();
+    const { user, subscription } = await grantAdminSubscription({
+      lookup,
+      planId: normalizedPlan,
+      adminTelegramId,
+    });
+
+    let userNotified = false;
+    try {
+      await sendTelegramMessage(
+        user.telegram_id,
+        [
+          "✅ <b>Your TheZiess subscription is active</b>",
+          "",
+          `Plan: <b>${escapeTelegramHtml(planLabel(subscription.plan_id))}</b>`,
+          `Expires: ${escapeTelegramHtml(subscription.expires_at ? formatDate(subscription.expires_at) : "No expiry date")}`,
+          "",
+          "Open or refresh the website to use video compression.",
+        ].join("\n"),
+      );
+      userNotified = true;
+    } catch (notificationError) {
+      console.warn("Subscription granted, but user notification failed:", {
+        message: notificationError?.message,
+        code: notificationError?.code,
+      });
+    }
+
+    await sendTelegramMessage(
+      chatId,
+      [
+        "✅ <b>Subscription assigned</b>",
+        "",
+        `User: <b>${escapeTelegramHtml(userName(user))}</b>`,
+        `Telegram ID: <code>${escapeTelegramHtml(user.telegram_id)}</code>`,
+        `Plan: <b>${escapeTelegramHtml(planLabel(subscription.plan_id))}</b>`,
+        `Starts: ${escapeTelegramHtml(formatDate(subscription.starts_at))}`,
+        `Expires: ${escapeTelegramHtml(subscription.expires_at ? formatDate(subscription.expires_at) : "No expiry date")}`,
+        `User notification: <b>${userNotified ? "Sent" : "Not delivered"}</b>`,
+        "",
+        "The user should reopen the website or refresh it to load the new subscription.",
+      ].join("\n"),
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "👤 View user", callback_data: `admin:user:${user.id}` }],
+            [{ text: "🏠 Admin", callback_data: "admin:home" }],
+          ],
+        },
+      },
+    );
+  } catch (error) {
+    const message = error?.code === "USER_NOT_FOUND"
+      ? "User not found. The user must log in to the website with Telegram at least once before an admin can assign a plan."
+      : error?.message || "Unable to assign the subscription.";
+
+    await sendTelegramMessage(
+      chatId,
+      `❌ <b>Subscription was not assigned</b>\n\n${escapeTelegramHtml(message)}`,
+      {
+        reply_markup: {
+          inline_keyboard: [[{ text: "🏠 Admin", callback_data: "admin:home" }]],
+        },
+      },
+    );
+  }
+}
+
+async function revokePlanFromUser(chatId, lookup) {
+  if (!lookup) {
+    await sendTelegramMessage(chatId, "Usage: <code>/revoke TELEGRAM_ID</code>");
+    return;
+  }
+
+  try {
+    const { revokeAdminSubscription } = await getDatabaseModule();
+    const { user, revoked } = await revokeAdminSubscription({ lookup });
+
+    if (revoked.length) {
+      try {
+        await sendTelegramMessage(
+          user.telegram_id,
+          [
+            "🚫 <b>Your paid TheZiess subscription was removed</b>",
+            "",
+            "Refresh the website to update your account access.",
+          ].join("\n"),
+        );
+      } catch (notificationError) {
+        console.warn("Subscription revoked, but user notification failed:", {
+          message: notificationError?.message,
+          code: notificationError?.code,
+        });
+      }
+    }
+
+    await sendTelegramMessage(
+      chatId,
+      [
+        revoked.length ? "✅ <b>Paid subscription revoked</b>" : "ℹ️ <b>No active paid subscription</b>",
+        "",
+        `User: <b>${escapeTelegramHtml(userName(user))}</b>`,
+        `Telegram ID: <code>${escapeTelegramHtml(user.telegram_id)}</code>`,
+        revoked.length
+          ? `Revoked plan: <b>${escapeTelegramHtml(planLabel(revoked[0].plan_id))}</b>`
+          : "Nothing was changed.",
+      ].join("\n"),
+      {
+        reply_markup: {
+          inline_keyboard: [[{ text: "🏠 Admin", callback_data: "admin:home" }]],
+        },
+      },
+    );
+  } catch (error) {
+    const message = error?.code === "USER_NOT_FOUND"
+      ? "User not found."
+      : error?.message || "Unable to revoke the subscription.";
+    await sendTelegramMessage(
+      chatId,
+      `❌ <b>Subscription was not revoked</b>\n\n${escapeTelegramHtml(message)}`,
+    );
+  }
 }
 
 async function sendSubscriptions(chatId) {
@@ -359,7 +540,7 @@ async function sendPayments(chatId) {
   });
 }
 
-async function handleAdminAction(chatId, action) {
+async function handleAdminAction(chatId, action, adminTelegramId) {
   if (action === "admin:home") return sendDashboard(chatId);
   if (action === "admin:stats") {
     return sendTelegramMessage(chatId, await buildStatsMessage(), {
@@ -371,9 +552,26 @@ async function handleAdminAction(chatId, action) {
   if (action === "admin:subscriptions") return sendSubscriptions(chatId);
   if (action === "admin:trials") return sendTrials(chatId);
   if (action === "admin:payments") return sendPayments(chatId);
+  if (action === "admin:grant:help") return sendGrantHelp(chatId);
 
   const usersMatch = /^admin:users:(\d+)$/.exec(action);
   if (usersMatch) return sendUsers(chatId, Number(usersMatch[1]));
+
+  const userMatch = /^admin:user:(\d+)$/.exec(action);
+  if (userMatch) return sendUserDetails(chatId, userMatch[1]);
+
+  const grantMatch = /^admin:grant:(\d+):(pro|premium|max)$/.exec(action);
+  if (grantMatch) {
+    return grantPlanToUser(
+      chatId,
+      grantMatch[1],
+      grantMatch[2],
+      adminTelegramId,
+    );
+  }
+
+  const revokeMatch = /^admin:revoke:(\d+)$/.exec(action);
+  if (revokeMatch) return revokePlanFromUser(chatId, revokeMatch[1]);
 
   return sendDashboard(chatId);
 }
@@ -471,6 +669,23 @@ async function handleMessage(message) {
     return;
   }
 
+  if (command === "grant" || command === "addplan" || command === "addsubscription") {
+    const [lookup, planId] = argument.split(/\s+/).filter(Boolean);
+    await grantPlanToUser(chatId, lookup, planId, senderId);
+    return;
+  }
+
+  if (command === "revoke" || command === "removeplan") {
+    const [lookup] = argument.split(/\s+/).filter(Boolean);
+    await revokePlanFromUser(chatId, lookup);
+    return;
+  }
+
+  if (command === "plans") {
+    await sendGrantHelp(chatId);
+    return;
+  }
+
   if (command === "subscriptions") {
     await sendSubscriptions(chatId);
     return;
@@ -505,7 +720,7 @@ async function handleCallback(callbackQuery) {
   }
 
   await answerTelegramCallback(callbackQuery.id);
-  await handleAdminAction(chatId, action);
+  await handleAdminAction(chatId, action, senderId);
 }
 
 export default async function handler(req, res) {

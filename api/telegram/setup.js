@@ -17,6 +17,9 @@ const ADMIN_COMMANDS = [
   { command: "users", description: "List registered users" },
   { command: "user", description: "Show one user's full information" },
   { command: "subscriptions", description: "Show active paid plans" },
+  { command: "grant", description: "Assign PRO, PREMIUM, or MAX to a user" },
+  { command: "revoke", description: "Remove a user's active paid plan" },
+  { command: "plans", description: "Show subscription assignment help" },
   { command: "trials", description: "Show active free trials" },
   { command: "payments", description: "Show recent payments" },
   { command: "id", description: "Show your Telegram ID" },
@@ -57,10 +60,12 @@ function validateManualSetupKey(req) {
   return safeEqual(getProvidedSetupKey(req), configuredKey);
 }
 
+const BOT_CONFIGURATION_VERSION = "admin-subscriptions-v11";
+
 function webhookVersion(secret, token, adminIds) {
   return crypto
     .createHash("sha256")
-    .update(`${secret}:${token.slice(0, 12)}:${adminIds.join(",")}`)
+    .update(`${BOT_CONFIGURATION_VERSION}:${secret}:${token.slice(0, 12)}:${adminIds.join(",")}`)
     .digest("hex")
     .slice(0, 12);
 }

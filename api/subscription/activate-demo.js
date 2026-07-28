@@ -8,12 +8,7 @@ import {
   setSessionCookie,
 } from "../_session.js";
 
-const ALLOWED_PLANS = new Set([
-  "free",
-  "pro",
-  "premium",
-  "max",
-]);
+const PAID_PLANS = new Set(["pro", "premium", "max"]);
 
 function readJsonBody(req) {
   if (!req.body) return {};
@@ -69,7 +64,17 @@ export default async function handler(req, res) {
         ? body.planId.trim().toLowerCase()
         : "";
 
-    if (!ALLOWED_PLANS.has(planId)) {
+    // Paid plans must never be self-activated from the public website.
+    // They can only be assigned by a configured Telegram administrator.
+    if (PAID_PLANS.has(planId)) {
+      return res.status(403).json({
+        error:
+          "PRO, PREMIUM, and MAX can only be activated by an administrator through the Telegram bot.",
+        code: "ADMIN_ACTIVATION_REQUIRED",
+      });
+    }
+
+    if (planId !== "free") {
       return res.status(400).json({
         error: "Invalid subscription plan.",
       });
@@ -77,11 +82,9 @@ export default async function handler(req, res) {
 
     const subscription = await activateSubscription({
       userId: user.id,
-      planId,
-      paymentMethod:
-        planId === "free"
-          ? "free-trial"
-          : "khqr-demo",
+      planId: "free",
+      paymentMethod: "free-trial",
+      recordPayment: false,
     });
 
     const publicSubscription = {

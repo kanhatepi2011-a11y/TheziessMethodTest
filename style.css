@@ -2596,3 +2596,32 @@ body[data-app-view="history"] #historySection .history-drawer {
   max-height: none;
   overflow: visible;
 }
+
+/* V11: paid plans are assigned only by a Telegram administrator */
+.plan-card.admin-only {
+  border-style: dashed;
+  background: linear-gradient(145deg, rgba(168, 85, 247, .055), rgba(255, 255, 255, .018));
+}
+
+.plan-card.admin-only:not(.current):hover {
+  border-color: rgba(251, 191, 36, .55);
+  background: rgba(245, 158, 11, .07);
+}
+
+.plan-chip-admin {
+  background: linear-gradient(135deg, #7c3aed, #f59e0b);
+  color: #fff;
+}
+
+.plan-card.admin-only small {
+  color: #d8b4fe;
+}
+
+.payment-body.admin-only-mode {
+  grid-template-columns: 1fr;
+}
+
+.payment-body.admin-only-mode .payment-summary,
+.payment-body.admin-only-mode .demo-warning {
+  grid-column: 1;
+}

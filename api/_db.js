@@ -112,6 +112,38 @@ export async function ensureSchema() {
         )
       `);
 
+      // V12 plan-duration migration:
+      // PREMIUM is 180 days and MAX is one year (365 days). Convert records
+      // created by older releases so no paid plan remains unlimited.
+      await pool.query(`
+        UPDATE ${SUBSCRIPTIONS_TABLE}
+        SET expires_at = starts_at + INTERVAL '365 days', updated_at = NOW()
+        WHERE plan_id = 'max'
+          AND expires_at IS NULL
+      `);
+
+      await pool.query(`
+        UPDATE ${SUBSCRIPTIONS_TABLE}
+        SET expires_at = starts_at + INTERVAL '180 days', updated_at = NOW()
+        WHERE plan_id = 'premium'
+          AND (
+            expires_at IS NULL
+            OR expires_at < starts_at + INTERVAL '180 days'
+          )
+      `);
+
+      await pool.query(`
+        UPDATE ${SUBSCRIPTIONS_TABLE}
+        SET expires_at = starts_at + INTERVAL '30 days', updated_at = NOW()
+        WHERE plan_id = 'pro'
+          AND expires_at IS NULL
+      `);
+
+      await pool.query(`
+        ALTER TABLE ${SUBSCRIPTIONS_TABLE}
+        ALTER COLUMN expires_at SET NOT NULL
+      `);
+
       await pool.query(`
         CREATE INDEX IF NOT EXISTS theziess_subscriptions_v5_user_status_idx
           ON ${SUBSCRIPTIONS_TABLE}(user_key, status, expires_at DESC)
@@ -230,7 +262,7 @@ export async function findActiveSubscription(userId) {
         FROM ${SUBSCRIPTIONS_TABLE}
         WHERE user_key = $1::TEXT
           AND status = 'active'
-          AND (plan_id = 'max' OR expires_at > NOW())
+          AND expires_at > NOW()
 
         UNION ALL
 
@@ -337,7 +369,7 @@ async function activateFreeTrial(client, userId) {
       FROM ${SUBSCRIPTIONS_TABLE}
       WHERE user_key = $1::TEXT
         AND status = 'active'
-        AND (plan_id = 'max' OR expires_at > NOW())
+        AND expires_at > NOW()
       LIMIT 1
     `,
     [String(userId)],
@@ -431,14 +463,15 @@ export async function activateSubscription({
   userId,
   planId,
   paymentMethod = "khqr-demo",
+  recordPayment = true,
 }) {
   await ensureSchema();
 
   const plans = {
     free: { amount: 0, days: 3 },
     pro: { amount: 2, days: 30 },
-    premium: { amount: 5, days: 120 },
-    max: { amount: 10, days: null },
+    premium: { amount: 5, days: 180 },
+    max: { amount: 10, days: 365 },
   };
 
   const selectedPlan = plans[planId];
@@ -475,6 +508,18 @@ export async function activateSubscription({
         `
           UPDATE ${SUBSCRIPTIONS_TABLE}
           SET status = 'expired', updated_at = NOW()
+          WHERE user_key = $1::TEXT
+            AND status = 'active'
+        `,
+        [String(userId)],
+      );
+
+      // A paid plan replaces any currently active free trial. This prevents
+      // trial access from reappearing after a paid plan is revoked or expires.
+      await client.query(
+        `
+          UPDATE ${FREE_TRIALS_TABLE}
+          SET status = 'cancelled', updated_at = NOW()
           WHERE user_key = $1::TEXT
             AND status = 'active'
         `,
@@ -528,7 +573,7 @@ export async function activateSubscription({
     client.release();
   }
 
-  if (planId !== "free") {
+  if (planId !== "free" && recordPayment) {
     try {
       await recordPaidDemoPayment({
         userId,
@@ -623,7 +668,7 @@ const ACTIVE_ACCESS_LATERAL = `
       FROM ${SUBSCRIPTIONS_TABLE}
       WHERE user_key = u.id::TEXT
         AND status = 'active'
-        AND (plan_id = 'max' OR expires_at > NOW())
+        AND expires_at > NOW()
 
       UNION ALL
 
@@ -650,7 +695,7 @@ export async function getAdminStats() {
     SELECT
       (SELECT COUNT(*)::INTEGER FROM users) AS total_users,
       (SELECT COUNT(*)::INTEGER FROM users WHERE last_login_at >= NOW() - INTERVAL '24 hours') AS users_last_24h,
-      (SELECT COUNT(*)::INTEGER FROM ${SUBSCRIPTIONS_TABLE} WHERE status = 'active' AND (plan_id = 'max' OR expires_at > NOW())) AS active_paid,
+      (SELECT COUNT(*)::INTEGER FROM ${SUBSCRIPTIONS_TABLE} WHERE status = 'active' AND expires_at > NOW()) AS active_paid,
       (SELECT COUNT(*)::INTEGER FROM ${FREE_TRIALS_TABLE} WHERE status = 'active' AND expires_at > NOW()) AS active_trials,
       (SELECT COUNT(*)::INTEGER FROM ${COMPRESSION_EVENTS_TABLE}) AS total_compressions,
       (SELECT COUNT(*)::INTEGER FROM ${COMPRESSION_EVENTS_TABLE} WHERE created_at >= NOW() - INTERVAL '24 hours') AS compressions_last_24h,
@@ -828,7 +873,7 @@ export async function listAdminActiveSubscriptions(limit = 12) {
       FROM ${SUBSCRIPTIONS_TABLE} s
       LEFT JOIN users u ON u.id::TEXT = s.user_key
       WHERE s.status = 'active'
-        AND (s.plan_id = 'max' OR s.expires_at > NOW())
+        AND s.expires_at > NOW()
       ORDER BY s.created_at DESC
       LIMIT $1
     `,
@@ -882,4 +927,78 @@ export async function listAdminRecentPayments(limit = 12) {
   );
 
   return result.rows;
+}
+
+
+const ADMIN_PAID_PLANS = new Set(["pro", "premium", "max"]);
+
+/**
+ * Assign a paid plan from the Telegram admin bot. Public website requests do
+ * not call this function. The caller must verify TELEGRAM_ADMIN_IDS first.
+ */
+export async function grantAdminSubscription({
+  lookup,
+  planId,
+  adminTelegramId,
+}) {
+  const normalizedPlan = String(planId || "").trim().toLowerCase();
+
+  if (!ADMIN_PAID_PLANS.has(normalizedPlan)) {
+    const error = new Error("Plan must be PRO, PREMIUM, or MAX.");
+    error.code = "INVALID_PAID_PLAN";
+    throw error;
+  }
+
+  const user = await findAdminUser(lookup);
+
+  if (!user) {
+    const error = new Error("User was not found.");
+    error.code = "USER_NOT_FOUND";
+    throw error;
+  }
+
+  const adminId = String(adminTelegramId || "").replace(/[^0-9-]/g, "").slice(0, 20);
+  const paymentMethod = adminId
+    ? `telegram-admin:${adminId}`
+    : "telegram-admin";
+
+  const subscription = await activateSubscription({
+    userId: user.id,
+    planId: normalizedPlan,
+    paymentMethod,
+    recordPayment: false,
+  });
+
+  return {
+    user,
+    subscription,
+  };
+}
+
+/** Cancel only active paid plans. Free-trial history is preserved. */
+export async function revokeAdminSubscription({ lookup }) {
+  await ensureSchema();
+  const user = await findAdminUser(lookup);
+
+  if (!user) {
+    const error = new Error("User was not found.");
+    error.code = "USER_NOT_FOUND";
+    throw error;
+  }
+
+  const result = await pool.query(
+    `
+      UPDATE ${SUBSCRIPTIONS_TABLE}
+      SET status = 'cancelled', updated_at = NOW()
+      WHERE user_key = $1::TEXT
+        AND status = 'active'
+      RETURNING *
+    `,
+    [String(user.id)],
+  );
+
+  return {
+    user,
+    revoked: result.rows,
+  };
 }

@@ -180,10 +180,7 @@ export function publicSession(session) {
   const isActive = Boolean(
     subscription &&
       subscription.status === "active" &&
-      (
-        subscription.planId === "max" ||
-        Number(subscription.expiresAt) > Date.now()
-      ),
+      Number(subscription.expiresAt) > Date.now(),
   );
 
   return {

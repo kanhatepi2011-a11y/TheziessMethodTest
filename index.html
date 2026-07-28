@@ -325,7 +325,7 @@
                   </h2>
 
                   <p>
-                    ជ្រើសរើស FREE 3 DAYS, PRO, PREMIUM ឬ MAX។ FREE trial ប្រើបានម្តងក្នុងមួយ Telegram account។
+                    FREE trial អ្នកប្រើអាចចាប់ផ្តើមបានម្តង។ PRO, PREMIUM និង MAX មិនអាច Claim Free បានទេ—Admin ត្រូវ Assign តាម Telegram Bot។
                   </p>
                 </div>
 
@@ -366,33 +366,35 @@
 
                 <button
                   type="button"
-                  class="plan-card"
+                  class="plan-card admin-only"
                   data-plan="pro"
                 >
+                  <span class="plan-chip plan-chip-admin">ADMIN ONLY</span>
                   <span class="plan-name">PRO</span>
                   <strong>$2</strong>
-                  <small>30 days</small>
+                  <small>30 days · admin activation</small>
                 </button>
 
                 <button
                   type="button"
-                  class="plan-card plan-featured"
+                  class="plan-card plan-featured admin-only"
                   data-plan="premium"
                 >
-                  <span class="plan-chip">POPULAR</span>
+                  <span class="plan-chip plan-chip-admin">ADMIN ONLY</span>
                   <span class="plan-name">PREMIUM</span>
                   <strong>$5</strong>
-                  <small>120 days</small>
+                  <small>180 days · admin activation</small>
                 </button>
 
                 <button
                   type="button"
-                  class="plan-card"
+                  class="plan-card admin-only"
                   data-plan="max"
                 >
+                  <span class="plan-chip plan-chip-admin">ADMIN ONLY</span>
                   <span class="plan-name">MAX</span>
                   <strong>$10</strong>
-                  <small>Unlimited</small>
+                  <small>1 year · admin activation</small>
                 </button>
               </div>
             </section>
@@ -965,7 +967,7 @@
           </div>
 
           <p id="profilePlanDescription">
-            Choose the FREE 3-day trial, PRO, PREMIUM, or MAX to unlock video compression.
+            Start the FREE 3-day trial yourself. PRO, PREMIUM, and MAX must be assigned by an administrator.
           </p>
         </section>
       </div>
@@ -1001,7 +1003,7 @@
     </div>
   </div>
 
-  <!-- Demo payment modal -->
+  <!-- Subscription activation/status modal -->
   <div
     class="modal-overlay"
     id="paymentModal"
@@ -1013,7 +1015,7 @@
       <div class="modal-header">
         <div class="modal-header-left">
           <i
-            class="ri-qr-code-line"
+            class="ri-lock-2-fill"
             aria-hidden="true"
           ></i>
 
@@ -1021,7 +1023,7 @@
             class="modal-title"
             id="paymentModalTitle"
           >
-            KHQR Demo Payment
+            Subscription Activation
           </span>
         </div>
 
@@ -1088,9 +1090,7 @@
             aria-hidden="true"
           ></i>
 
-          នេះជា Demo KHQR មិនទទួលប្រាក់ពិតទេ។
-          ចុច “Confirm Demo Payment”
-          ដើម្បី Activate plan សាកល្បង។
+          FREE trial អាច Activate ដោយអ្នកប្រើ។ Paid plans ត្រូវឱ្យ Admin Assign តាម Telegram Bot។
         </div>
       </div>
 
@@ -1108,7 +1108,7 @@
           class="modal-btn modal-btn-confirm"
           id="confirmPaymentBtn"
         >
-          Confirm Demo Payment
+          Continue
         </button>
       </div>
     </div>

@@ -84,7 +84,7 @@ function clearStoredTelegramUser() {
     }
 }
 
-const TELEGRAM_BOT_BOOTSTRAP_KEY = "theziess.telegram.botBootstrapAt";
+const TELEGRAM_BOT_BOOTSTRAP_KEY = "theziess.telegram.botBootstrapAt.v11";
 const TELEGRAM_BOT_BOOTSTRAP_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 async function autoConnectTelegramAdminBot() {
@@ -195,10 +195,10 @@ let currentSubscription = null;
 let pendingPlan = null;
 
 const PLANS = {
-    free: { id: "free", name: "FREE", price: "$0", durationLabel: "3 days", days: 3 },
-    pro: { id: "pro", name: "PRO", price: "$2", durationLabel: "30 days", days: 30 },
-    premium: { id: "premium", name: "PREMIUM", price: "$5", durationLabel: "120 days", days: 120 },
-    max: { id: "max", name: "MAX", price: "$10", durationLabel: "Unlimited", days: null },
+    free: { id: "free", name: "FREE", price: "$0", durationLabel: "3 days", days: 3, adminOnly: false },
+    pro: { id: "pro", name: "PRO", price: "$2", durationLabel: "30 days", days: 30, adminOnly: true },
+    premium: { id: "premium", name: "PREMIUM", price: "$5", durationLabel: "180 days", days: 180, adminOnly: true },
+    max: { id: "max", name: "MAX", price: "$10", durationLabel: "1 year", days: 365, adminOnly: true },
 };
 
 function hasActiveSubscription() {
@@ -210,16 +210,11 @@ function hasActiveSubscription() {
         return false;
     }
 
-    if (currentSubscription.planId === "max") {
-        return true;
-    }
-
     return Number(currentSubscription.expiresAt) > Date.now();
 }
 
 function formatSubscriptionExpiry(subscription) {
     if (!subscription) return "No active subscription";
-    if (subscription.planId === "max") return "MAX · Unlimited";
     return `${PLANS[subscription.planId]?.name || "PLAN"} · until ${new Date(subscription.expiresAt).toLocaleDateString()}`;
 }
 
@@ -334,9 +329,7 @@ function updateTelegramProfileUI(loggedIn, active) {
         setElementText("profilePlanStatus", "Active");
         setElementText(
             "profilePlanExpiry",
-            currentSubscription.planId === "max"
-                ? "Unlimited"
-                : new Date(currentSubscription.expiresAt).toLocaleDateString(),
+            new Date(currentSubscription.expiresAt).toLocaleDateString(),
         );
         setElementText(
             "profilePlanDescription",
@@ -353,7 +346,7 @@ function updateTelegramProfileUI(loggedIn, active) {
         setElementText("profilePlanExpiry", "—");
         setElementText(
             "profilePlanDescription",
-            "Choose the FREE 3-day trial, PRO, PREMIUM, or MAX to unlock video compression.",
+            "Start the FREE 3-day trial yourself. PRO, PREMIUM, and MAX must be assigned by an administrator.",
         );
         profilePlanBadge?.classList.remove("premium", "trial");
     } else {
@@ -381,6 +374,7 @@ function closeModal(id) { document.getElementById(id)?.classList.remove("active"
 
 function configurePlanActivationModal(plan) {
     const isFreeTrial = plan?.id === "free";
+    const isAdminOnly = Boolean(plan?.adminOnly);
     const paymentBody = document.getElementById("paymentBody");
     const khqrCard = document.getElementById("khqrCard");
     const paymentNotice = document.getElementById("paymentNotice");
@@ -388,27 +382,28 @@ function configurePlanActivationModal(plan) {
 
     setElementText(
         "paymentModalTitle",
-        isFreeTrial ? "Activate 3-Day Free Trial" : "KHQR Demo Payment",
+        isFreeTrial ? "Activate 3-Day Free Trial" : "Admin Activation Required",
     );
     setElementText("paymentAmount", plan?.price || "$0");
     setElementText("paymentPlanName", plan?.name || "—");
     setElementText("paymentDuration", plan?.durationLabel || "—");
 
     paymentBody?.classList.toggle("free-trial-mode", isFreeTrial);
-    if (khqrCard) khqrCard.hidden = isFreeTrial;
+    paymentBody?.classList.toggle("admin-only-mode", isAdminOnly);
+    if (khqrCard) khqrCard.hidden = true;
     if (paymentNotice) {
         paymentNotice.classList.remove("error");
         paymentNotice.textContent = isFreeTrial
             ? "This free trial can be activated once per Telegram account. The 3-day period starts immediately after confirmation."
-            : "នេះជា Demo KHQR មិនទទួលប្រាក់ពិតទេ។ ចុច “Confirm Demo Payment” ដើម្បី Activate plan សាកល្បង។";
+            : `${plan?.name || "This paid plan"} cannot be claimed for free. Only an administrator can assign it through the Telegram bot. Your Telegram ID is ${currentUser?.id || "unknown"}.`;
     }
     if (confirmButton) {
+        confirmButton.dataset.activationMode = isFreeTrial ? "free" : "admin-only";
         confirmButton.textContent = isFreeTrial
             ? "Start 3-Day Free Trial"
-            : "Confirm Demo Payment";
+            : "Check Subscription";
     }
 }
-
 function setSubscriptionPlansOpen(open, { scroll = true } = {}) {
     const panel = document.getElementById("subscriptionPanel");
     const hint = document.getElementById("patchAccessHint");
@@ -465,14 +460,18 @@ function updateAccessUI() {
         subscriptionStatus.classList.toggle("required", loggedIn && !active);
     }
     document.querySelectorAll(".plan-card").forEach((card) => {
+        const plan = PLANS[card.dataset.plan];
         const isCurrent = active && card.dataset.plan === currentSubscription?.planId;
         const freeBlockedByActivePlan = active && card.dataset.plan === "free";
         card.classList.toggle("current", isCurrent);
+        card.classList.toggle("admin-only", Boolean(plan?.adminOnly));
         card.disabled = freeBlockedByActivePlan;
         if (freeBlockedByActivePlan) {
             card.title = isCurrent
                 ? "Your free trial is already active."
                 : "You already have an active subscription.";
+        } else if (plan?.adminOnly) {
+            card.title = `${plan.name} can only be assigned by an administrator.`;
         } else {
             card.removeAttribute("title");
         }
@@ -498,7 +497,7 @@ function requireActiveSubscription({ focusPlans = true } = {}) {
     if (hasActiveSubscription()) return true;
 
     logMessage(
-        "Choose the FREE 3-day trial or an active paid plan before compressing videos.",
+        "Start the FREE 3-day trial or ask an administrator to assign PRO, PREMIUM, or MAX before compressing videos.",
         "warning",
     );
 
@@ -664,15 +663,52 @@ async function initializeMembership() {
 
         button.disabled = true;
         button.setAttribute("aria-busy", "true");
-        button.textContent = activatedPlan.id === "free"
-            ? "Activating Free Trial…"
-            : "Activating Plan…";
+
+        // Paid plans are read-only on the public website. This button only
+        // refreshes the user's session after an administrator grants access.
+        if (activatedPlan.adminOnly) {
+            button.textContent = "Checking…";
+            if (paymentNotice) {
+                paymentNotice.classList.remove("error");
+                paymentNotice.textContent = "Checking whether an administrator has assigned this plan…";
+            }
+
+            try {
+                await loadServerSession({ retries: 2 });
+                const assigned = hasActiveSubscription() &&
+                    currentSubscription?.planId === activatedPlan.id;
+
+                if (assigned) {
+                    pendingPlan = null;
+                    closeModal("paymentModal");
+                    hideSubscriptionPlans();
+                    updateAccessUI();
+                    logMessage(`${activatedPlan.name} was assigned by an administrator. Compression is now unlocked.`, "success");
+                    return;
+                }
+
+                if (paymentNotice) {
+                    paymentNotice.textContent = `${activatedPlan.name} is not active yet. Ask the administrator to use /grant ${currentUser?.id || "YOUR_TELEGRAM_ID"} ${activatedPlan.id} in the Telegram bot.`;
+                    paymentNotice.classList.add("error");
+                }
+            } catch (error) {
+                if (paymentNotice) {
+                    paymentNotice.textContent = error.message || "Unable to check the subscription right now.";
+                    paymentNotice.classList.add("error");
+                }
+            } finally {
+                button.disabled = false;
+                button.removeAttribute("aria-busy");
+                button.textContent = originalLabel;
+            }
+            return;
+        }
+
+        button.textContent = "Activating Free Trial…";
 
         if (paymentNotice) {
             paymentNotice.classList.remove("error");
-            paymentNotice.textContent = activatedPlan.id === "free"
-                ? "Activating your 3-day free trial. Please wait…"
-                : "Activating your subscription. Please wait…";
+            paymentNotice.textContent = "Activating your 3-day free trial. Please wait…";
         }
 
         try {
@@ -684,7 +720,7 @@ async function initializeMembership() {
                     "Content-Type": "application/json",
                     Accept: "application/json",
                 },
-                body: JSON.stringify({ planId: activatedPlan.id }),
+                body: JSON.stringify({ planId: "free" }),
             });
 
             const rawBody = await response.text();
@@ -697,59 +733,39 @@ async function initializeMembership() {
             }
 
             if (!response.ok) {
-                throw new Error(data.error || "Subscription activation failed.");
+                throw new Error(data.error || "Free-trial activation failed.");
             }
 
-            if (!data.subscription?.planId || data.subscription.status !== "active") {
-                throw new Error("The subscription was not activated correctly. Please try again.");
+            if (data.subscription?.planId !== "free" || data.subscription.status !== "active") {
+                throw new Error("The free trial was not activated correctly. Please try again.");
             }
 
-            // Apply the successful server response immediately. This unlocks
-            // compression without requiring a page refresh or another login.
             currentSubscription = data.subscription;
             pendingPlan = null;
             updateAccessUI();
-
             closeModal("paymentModal");
             hideSubscriptionPlans();
+            logMessage("Your 3-day free trial is active. Compression is now unlocked.", "success");
 
-            logMessage(
-                activatedPlan.id === "free"
-                    ? "Your 3-day free trial is active. Compression is now unlocked."
-                    : `${activatedPlan.name} subscription activated. Compression is now unlocked.`,
-                "success",
-            );
-
-            // Re-read the signed session in the background so the subscription
-            // also remains active after refresh. Preserve the successful API
-            // response if the database read is briefly delayed.
             await loadServerSession({
                 retries: 3,
                 preserveExistingSubscription: true,
             });
         } catch (error) {
-            // The server may have committed the trial even when the response
-            // was interrupted. Re-read the signed session before showing an
-            // error so a successful activation is never hidden from the user.
             await loadServerSession({
                 retries: 2,
                 preserveExistingSubscription: true,
             });
 
             const recovered = hasActiveSubscription() &&
-                currentSubscription?.planId === activatedPlan.id;
+                currentSubscription?.planId === "free";
 
             if (recovered) {
                 pendingPlan = null;
                 closeModal("paymentModal");
                 hideSubscriptionPlans();
                 updateAccessUI();
-                logMessage(
-                    activatedPlan.id === "free"
-                        ? "Your 3-day free trial is active. Compression is now unlocked."
-                        : `${activatedPlan.name} subscription activated. Compression is now unlocked.`,
-                    "success",
-                );
+                logMessage("Your 3-day free trial is active. Compression is now unlocked.", "success");
                 return;
             }
 
@@ -772,6 +788,22 @@ async function initializeMembership() {
         toggleSubscriptionPlans();
     });
     document.getElementById("lockActionBtn")?.addEventListener("click", () => openModal("telegramModal"));
+
+    // When an administrator grants or revokes a plan while this page is open,
+    // refresh access automatically when the user returns to the tab/window.
+    let lastMembershipRefreshAt = 0;
+    const refreshMembershipOnReturn = () => {
+        if (!currentUser || Date.now() - lastMembershipRefreshAt < 1500) return;
+        lastMembershipRefreshAt = Date.now();
+        loadServerSession({ retries: 1 }).catch((error) => {
+            console.warn("Unable to refresh subscription status", error);
+        });
+    };
+    window.addEventListener("focus", refreshMembershipOnReturn);
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") refreshMembershipOnReturn();
+    });
+
     updateAccessUI();
 }
 
