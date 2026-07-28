@@ -41,7 +41,7 @@
 
   <link
     rel="stylesheet"
-    href="style.css?v=20260727-history-view-v7"
+    href="style.css?v=20260728-tiktok-check-v15"
   >
 
   <link
@@ -546,6 +546,146 @@
           aria-live="polite"
         ></div>
       </section>
+
+      <section
+        class="panel panel-video-check"
+        id="videoCheckSection"
+        aria-labelledby="videoCheckTitle"
+        hidden
+      >
+        <div class="video-check-heading">
+          <div class="video-check-heading-icon" aria-hidden="true">
+            <i class="ri-file-search-line"></i>
+          </div>
+
+          <div>
+            <span class="video-check-eyebrow">TIKTOK VIDEO INSPECTOR</span>
+            <h2 id="videoCheckTitle">Check TikTok Video</h2>
+            <p>
+              បញ្ចូល TikTok link ដើម្បីពិនិត្យ Resolution, Bitrate, FPS,
+              Duration និង File Size។
+            </p>
+          </div>
+        </div>
+
+        <form class="video-check-form" id="videoCheckForm">
+          <label class="video-check-label" for="videoCheckUrl">
+            TikTok video link
+          </label>
+
+          <div class="video-check-input-row">
+            <div class="video-check-input-wrap">
+              <i class="ri-tiktok-fill" aria-hidden="true"></i>
+              <input
+                type="url"
+                id="videoCheckUrl"
+                name="url"
+                inputmode="url"
+                autocomplete="url"
+                spellcheck="false"
+                placeholder="https://www.tiktok.com/@username/video/..."
+                required
+              >
+
+              <button
+                type="button"
+                class="video-check-paste"
+                id="videoCheckPasteBtn"
+                title="Paste TikTok link"
+                aria-label="Paste TikTok link"
+              >
+                <i class="ri-clipboard-line" aria-hidden="true"></i>
+              </button>
+            </div>
+
+            <button
+              type="submit"
+              class="video-check-submit"
+              id="videoCheckSubmitBtn"
+            >
+              <i class="ri-search-eye-line" aria-hidden="true"></i>
+              <span>Check Video</span>
+            </button>
+          </div>
+        </form>
+
+        <div
+          class="video-check-status"
+          id="videoCheckStatus"
+          role="status"
+          aria-live="polite"
+        >
+          Paste a public TikTok video link to begin.
+        </div>
+
+        <div class="video-check-result" id="videoCheckResult" hidden>
+          <div class="video-check-preview">
+            <div class="video-check-thumbnail-wrap">
+              <img
+                id="videoCheckThumbnail"
+                alt="TikTok video thumbnail"
+                referrerpolicy="no-referrer"
+                hidden
+              >
+              <div class="video-check-thumbnail-fallback" id="videoCheckThumbnailFallback">
+                <i class="ri-tiktok-fill" aria-hidden="true"></i>
+              </div>
+            </div>
+
+            <div class="video-check-video-copy">
+              <span class="video-check-result-label">VIDEO FOUND</span>
+              <strong id="videoCheckVideoTitle">TikTok video</strong>
+              <span id="videoCheckVideoAuthor">TikTok creator</span>
+              <a
+                id="videoCheckOriginalLink"
+                href="#"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Open original video
+                <i class="ri-external-link-line" aria-hidden="true"></i>
+              </a>
+            </div>
+          </div>
+
+          <div class="video-check-metrics">
+            <article class="video-check-metric">
+              <i class="ri-aspect-ratio-line" aria-hidden="true"></i>
+              <span>Resolution</span>
+              <strong id="videoCheckResolution">—</strong>
+            </article>
+
+            <article class="video-check-metric">
+              <i class="ri-speed-up-line" aria-hidden="true"></i>
+              <span>Bitrate</span>
+              <strong id="videoCheckBitrate">—</strong>
+            </article>
+
+            <article class="video-check-metric">
+              <i class="ri-film-line" aria-hidden="true"></i>
+              <span>FPS</span>
+              <strong id="videoCheckFps">—</strong>
+            </article>
+
+            <article class="video-check-metric">
+              <i class="ri-time-line" aria-hidden="true"></i>
+              <span>Duration</span>
+              <strong id="videoCheckDuration">—</strong>
+            </article>
+
+            <article class="video-check-metric">
+              <i class="ri-database-2-line" aria-hidden="true"></i>
+              <span>File Size</span>
+              <strong id="videoCheckFileSize">—</strong>
+            </article>
+          </div>
+
+          <div class="video-check-note" id="videoCheckNote">
+            <i class="ri-information-line" aria-hidden="true"></i>
+            <span>Metadata is checked without saving the TikTok video.</span>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -584,6 +724,16 @@
       <i class="ri-history-line" aria-hidden="true"></i>
       <span>History</span>
       <span class="app-nav-count" id="navHistoryCount" hidden>0</span>
+    </button>
+
+    <button
+      type="button"
+      class="app-nav-button"
+      id="navCheckBtn"
+      data-view="check"
+    >
+      <i class="ri-search-eye-line" aria-hidden="true"></i>
+      <span>Check</span>
     </button>
 
     <button
@@ -1146,7 +1296,7 @@
 
   <script
     type="module"
-    src="app.js?v=20260727-history-view-v7"
+    src="app.js?v=20260728-tiktok-check-v15"
   ></script>
 </body>
 </html>

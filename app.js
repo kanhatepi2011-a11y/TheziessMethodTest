@@ -182,6 +182,13 @@ const historySection = document.getElementById("historySection");
 const clearHistoryBtn = document.getElementById("clearHistoryBtn");
 const queueAndActionsWrapper = document.querySelector(".queue-and-actions-wrapper");
 const systemStatusPanel = document.querySelector(".panel-log");
+const videoCheckSection = document.getElementById("videoCheckSection");
+const videoCheckForm = document.getElementById("videoCheckForm");
+const videoCheckUrl = document.getElementById("videoCheckUrl");
+const videoCheckSubmitBtn = document.getElementById("videoCheckSubmitBtn");
+const videoCheckPasteBtn = document.getElementById("videoCheckPasteBtn");
+const videoCheckStatus = document.getElementById("videoCheckStatus");
+const videoCheckResult = document.getElementById("videoCheckResult");
 
 let selectedFiles = [];
 let currentFlowState = "idle";
@@ -861,31 +868,260 @@ function setHistorySectionVisible(visible) {
     }
 }
 
+function setVideoCheckStatus(message, state = "idle") {
+    if (!videoCheckStatus) return;
+    videoCheckStatus.textContent = message;
+    videoCheckStatus.dataset.state = state;
+}
+
+function formatCheckedDuration(seconds) {
+    const totalSeconds = Number(seconds);
+    if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return "Unavailable";
+
+    const rounded = Math.round(totalSeconds);
+    const hours = Math.floor(rounded / 3600);
+    const minutes = Math.floor((rounded % 3600) / 60);
+    const remainingSeconds = rounded % 60;
+
+    if (hours > 0) {
+        return `${hours}:${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
+    }
+    return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+}
+
+function formatCheckedBitrate(bitsPerSecond) {
+    const bitrate = Number(bitsPerSecond);
+    if (!Number.isFinite(bitrate) || bitrate <= 0) return "Unavailable";
+    if (bitrate >= 1_000_000) return `${(bitrate / 1_000_000).toFixed(2)} Mbps`;
+    return `${Math.round(bitrate / 1000)} kbps`;
+}
+
+function formatCheckedFps(fps) {
+    const value = Number(fps);
+    if (!Number.isFinite(value) || value <= 0) return "Unavailable";
+    const rounded = Math.abs(value - Math.round(value)) < 0.05
+        ? Math.round(value)
+        : value.toFixed(2);
+    return `${rounded} FPS`;
+}
+
+function formatCheckedResolution(resolution) {
+    const width = Number(resolution?.width);
+    const height = Number(resolution?.height);
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+        return "Unavailable";
+    }
+    return `${Math.round(width)} × ${Math.round(height)}`;
+}
+
+function resetTikTokVideoResult() {
+    if (videoCheckResult) videoCheckResult.hidden = true;
+    const thumbnail = document.getElementById("videoCheckThumbnail");
+    const fallback = document.getElementById("videoCheckThumbnailFallback");
+    if (thumbnail) {
+        thumbnail.hidden = true;
+        thumbnail.removeAttribute("src");
+    }
+    if (fallback) fallback.hidden = false;
+}
+
+function renderTikTokVideoResult(payload) {
+    const video = payload?.video || {};
+    const thumbnail = document.getElementById("videoCheckThumbnail");
+    const fallback = document.getElementById("videoCheckThumbnailFallback");
+    const originalLink = document.getElementById("videoCheckOriginalLink");
+
+    setElementText("videoCheckVideoTitle", video.title || "TikTok video");
+    setElementText(
+        "videoCheckVideoAuthor",
+        video.author ? `@${String(video.author).replace(/^@/, "")}` : "TikTok creator",
+    );
+    setElementText("videoCheckResolution", formatCheckedResolution(video.resolution));
+    setElementText("videoCheckBitrate", formatCheckedBitrate(video.bitrate));
+    setElementText("videoCheckFps", formatCheckedFps(video.fps));
+    setElementText("videoCheckDuration", formatCheckedDuration(video.duration));
+    setElementText(
+        "videoCheckFileSize",
+        Number(video.fileSize) > 0 ? formatFileSize(Number(video.fileSize)) : "Unavailable",
+    );
+
+    const note = document.querySelector("#videoCheckNote span");
+    if (note) {
+        note.textContent = payload?.note || "Metadata is checked without saving the TikTok video.";
+    }
+
+    if (originalLink) {
+        originalLink.href = video.url || "https://www.tiktok.com/";
+    }
+
+    if (thumbnail && video.thumbnail) {
+        thumbnail.onload = () => {
+            thumbnail.hidden = false;
+            if (fallback) fallback.hidden = true;
+        };
+        thumbnail.onerror = () => {
+            thumbnail.hidden = true;
+            if (fallback) fallback.hidden = false;
+        };
+        thumbnail.src = video.thumbnail;
+    } else {
+        if (thumbnail) thumbnail.hidden = true;
+        if (fallback) fallback.hidden = false;
+    }
+
+    if (videoCheckResult) videoCheckResult.hidden = false;
+}
+
+function normalizeClientTikTokUrl(value) {
+    let url = String(value || "").trim();
+    if (!url) throw new Error("Paste a TikTok video link first.");
+    if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+
+    let parsed;
+    try {
+        parsed = new URL(url);
+    } catch {
+        throw new Error("This TikTok link is not valid.");
+    }
+
+    const host = parsed.hostname.toLowerCase();
+    if (host !== "tiktok.com" && !host.endsWith(".tiktok.com")) {
+        throw new Error("Please use a link from TikTok.");
+    }
+
+    return parsed.toString();
+}
+
+function initializeTikTokVideoChecker() {
+    if (!videoCheckForm || !videoCheckUrl || !videoCheckSubmitBtn) return;
+
+    videoCheckPasteBtn?.addEventListener("click", async () => {
+        try {
+            const value = await navigator.clipboard.readText();
+            if (!value) {
+                setVideoCheckStatus("Clipboard is empty.", "error");
+                return;
+            }
+            videoCheckUrl.value = value.trim();
+            videoCheckUrl.focus();
+            setVideoCheckStatus("TikTok link pasted. Press Check Video.", "ready");
+        } catch {
+            setVideoCheckStatus("Browser blocked clipboard access. Paste the link manually.", "error");
+            videoCheckUrl.focus();
+        }
+    });
+
+    videoCheckForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (!requireLogin()) return;
+
+        let url;
+        try {
+            url = normalizeClientTikTokUrl(videoCheckUrl.value);
+        } catch (error) {
+            resetTikTokVideoResult();
+            setVideoCheckStatus(error.message, "error");
+            return;
+        }
+
+        const originalMarkup = videoCheckSubmitBtn.innerHTML;
+        videoCheckSubmitBtn.disabled = true;
+        videoCheckSubmitBtn.setAttribute("aria-busy", "true");
+        videoCheckSubmitBtn.innerHTML =
+            '<i class="ri-loader-4-line video-check-spinner" aria-hidden="true"></i><span>Checking...</span>';
+        resetTikTokVideoResult();
+        setVideoCheckStatus(
+            "Checking TikTok video metadata. This can take a few seconds...",
+            "loading",
+        );
+
+        try {
+            const response = await fetch("/api/tiktok/check", {
+                method: "POST",
+                credentials: "same-origin",
+                cache: "no-store",
+                headers: {
+                    "Content-Type": "application/json",
+                    Accept: "application/json",
+                },
+                body: JSON.stringify({ url }),
+            });
+
+            const rawBody = await response.text();
+            let data = {};
+            try {
+                data = rawBody ? JSON.parse(rawBody) : {};
+            } catch {
+                throw new Error("The server returned an invalid TikTok check response.");
+            }
+
+            if (!response.ok || !data.ok) {
+                const code = data.code ? ` (${data.code})` : "";
+                throw new Error(`${data.error || "Unable to inspect this TikTok video."}${code}`);
+            }
+
+            renderTikTokVideoResult(data);
+            const missing = Object.entries(data.availability || {})
+                .filter(([, available]) => !available)
+                .map(([name]) => name);
+
+            if (missing.length > 0) {
+                setVideoCheckStatus(
+                    `Video checked. TikTok did not expose: ${missing.join(", ")}.`,
+                    "warning",
+                );
+            } else {
+                setVideoCheckStatus("Video metadata checked successfully.", "success");
+            }
+        } catch (error) {
+            resetTikTokVideoResult();
+            setVideoCheckStatus(error.message, "error");
+        } finally {
+            videoCheckSubmitBtn.disabled = false;
+            videoCheckSubmitBtn.removeAttribute("aria-busy");
+            videoCheckSubmitBtn.innerHTML = originalMarkup;
+        }
+    });
+}
+
 function setPrimaryAppView(view) {
     const historyOnly = view === "history";
+    const checkOnly = view === "check";
+    const compressorOnly = !historyOnly && !checkOnly;
 
-    // History is a real standalone tab. Hide every compressor-only block so
-    // the History screen contains only saved output videos and its controls.
+    // History and Check are dedicated views. Compressor controls are restored
+    // only when the Compress navigation item is selected.
     if (dropZone) {
-        dropZone.hidden = historyOnly;
-        dropZone.setAttribute("aria-hidden", String(historyOnly));
+        dropZone.hidden = !compressorOnly;
+        dropZone.setAttribute("aria-hidden", String(!compressorOnly));
     }
     if (queueAndActionsWrapper) {
-        queueAndActionsWrapper.hidden = historyOnly;
-        queueAndActionsWrapper.setAttribute("aria-hidden", String(historyOnly));
+        queueAndActionsWrapper.hidden = !compressorOnly;
+        queueAndActionsWrapper.setAttribute("aria-hidden", String(!compressorOnly));
     }
     if (systemStatusPanel) {
-        systemStatusPanel.hidden = historyOnly;
-        systemStatusPanel.setAttribute("aria-hidden", String(historyOnly));
+        systemStatusPanel.hidden = !compressorOnly;
+        systemStatusPanel.setAttribute("aria-hidden", String(!compressorOnly));
     }
 
     setHistorySectionVisible(historyOnly);
-    document.body.dataset.appView = historyOnly ? "history" : "compress";
+
+    if (videoCheckSection) {
+        videoCheckSection.hidden = !checkOnly;
+        videoCheckSection.setAttribute("aria-hidden", String(!checkOnly));
+    }
+
+    document.body.dataset.appView = checkOnly
+        ? "check"
+        : historyOnly
+          ? "history"
+          : "compress";
 }
 
 function initializeBottomNavigation() {
     const compressButton = document.getElementById("navCompressBtn");
     const historyButton = document.getElementById("navHistoryBtn");
+    const checkButton = document.getElementById("navCheckBtn");
     const profileButton = document.getElementById("navProfileBtn");
     const profileModal = document.getElementById("profileModal");
 
@@ -905,6 +1141,14 @@ function initializeBottomNavigation() {
         document.getElementById("historyToggleBtn")?.setAttribute("aria-expanded", "true");
         setActiveNavigation("history");
         focusNavigationSection(historyContainer);
+    });
+
+    checkButton?.addEventListener("click", () => {
+        if (!requireLogin()) return;
+        setPrimaryAppView("check");
+        setActiveNavigation("check");
+        focusNavigationSection(videoCheckSection);
+        window.setTimeout(() => videoCheckUrl?.focus({ preventScroll: true }), 250);
     });
 
     profileButton?.addEventListener("click", () => {
@@ -946,6 +1190,7 @@ function initializeApp() {
     initializeMembership();
     autoConnectTelegramAdminBot();
     renderHistoryList();
+    initializeTikTokVideoChecker();
     initializeBottomNavigation();
     adjustMobileLayout();
     window.addEventListener("resize", adjustMobileLayout);

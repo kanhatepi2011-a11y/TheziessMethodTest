@@ -2,6 +2,15 @@
 
 All notable changes to the NoBlur project are documented in this file.
 
+## [3.0.0] - 2026-07-28
+
+- Added a fourth bottom-navigation tab named Check
+- Added TikTok link inspection for resolution, bitrate, FPS, duration, and file size
+- Added secure server-side TikTok URL and redirect validation
+- Added official oEmbed and official player-page fallback metadata sources
+- Added partial MP4 range probing without saving the video
+- Added mobile-responsive video-check results and error states
+
 ## [2.6.1] - 2026-07-27
 
 - Made FREE 3-day trial activation idempotent and recoverable after interrupted responses
