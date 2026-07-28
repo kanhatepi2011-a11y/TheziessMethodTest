@@ -323,13 +323,38 @@ export default async function handler(req, res) {
 </body>
 </html>`);
   } catch (error) {
-    console.error(
-      "Telegram OIDC callback error:",
-      error,
-    );
+    const errorCode = error?.code || "TELEGRAM_LOGIN_ERROR";
 
-    return res.status(500).send(
-      "Telegram login failed. Check Telegram configuration, SESSION_SECRET and DATABASE_URL.",
-    );
+    console.error("Telegram OIDC callback error:", {
+      code: errorCode,
+      message: error?.message || String(error),
+      stack: error?.stack,
+    });
+
+    // Clear one-time OAuth cookies so the next attempt starts cleanly.
+    appendCookies(res, [
+      createClearCookie("telegram_oauth_state"),
+      createClearCookie("telegram_pkce_verifier"),
+    ]);
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+    const safeErrorCode = String(errorCode).replace(/[^A-Z0-9_-]/gi, "");
+
+    return res.status(500).send(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Telegram login failed</title>
+</head>
+<body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#0d0717;color:#f5efff;font-family:system-ui,sans-serif">
+  <main style="width:min(92vw,520px);padding:24px;border:1px solid #4b2a68;border-radius:18px;background:#160b25;text-align:center">
+    <h1 style="font-size:22px;margin:0 0 10px">Telegram login could not finish</h1>
+    <p style="color:#cdbfe0;line-height:1.6">Please return to the app and try one more time. Error code: <strong>${safeErrorCode}</strong></p>
+    <a href="/?telegram_login=failed" style="display:inline-block;margin-top:10px;padding:12px 18px;border-radius:12px;background:linear-gradient(135deg,#7c3aed,#22d3ee);color:white;text-decoration:none;font-weight:800">Return to app</a>
+  </main>
+</body>
+</html>`);
   }
 }

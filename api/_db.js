@@ -35,6 +35,56 @@ const PAYMENTS_TABLE = "theziess_payments_v5";
 const COMPRESSION_EVENTS_TABLE = "theziess_compression_events_v1";
 
 let schemaPromise;
+let paidPlanMigrationPromise;
+
+/**
+ * Upgrade old paid subscriptions without making login depend on a DDL change.
+ * Some hosted PostgreSQL roles can read/write tables but cannot ALTER them.
+ * V12 ran ALTER TABLE during every cold start, so one permission/lock/data
+ * problem prevented upsertTelegramUser() and made Telegram login fail.
+ *
+ * New grants already have the correct expiry. This migration is best-effort:
+ * it upgrades old rows, logs a failure, and never blocks authentication.
+ */
+async function migratePaidPlanDurationsSafely() {
+  if (!paidPlanMigrationPromise) {
+    paidPlanMigrationPromise = (async () => {
+      await pool.query(`
+        UPDATE ${SUBSCRIPTIONS_TABLE}
+        SET
+          expires_at = CASE
+            WHEN plan_id = 'pro' THEN starts_at + INTERVAL '30 days'
+            WHEN plan_id = 'premium' THEN starts_at + INTERVAL '180 days'
+            WHEN plan_id = 'max' THEN starts_at + INTERVAL '365 days'
+            ELSE expires_at
+          END,
+          updated_at = NOW()
+        WHERE
+          (plan_id = 'pro' AND expires_at IS NULL)
+          OR (
+            plan_id = 'premium'
+            AND (
+              expires_at IS NULL
+              OR expires_at < starts_at + INTERVAL '180 days'
+            )
+          )
+          OR (plan_id = 'max' AND expires_at IS NULL)
+      `);
+
+      return true;
+    })().catch((error) => {
+      // Authentication must continue even if legacy subscription data cannot
+      // be migrated during this request. Admin can re-grant the plan later.
+      console.error("Paid plan duration migration skipped:", {
+        code: error?.code || "UNKNOWN",
+        message: error?.message || String(error),
+      });
+      return false;
+    });
+  }
+
+  return paidPlanMigrationPromise;
+}
 
 /**
  * Versioned subscription tables deliberately avoid old Neon tables whose
@@ -112,38 +162,6 @@ export async function ensureSchema() {
         )
       `);
 
-      // V12 plan-duration migration:
-      // PREMIUM is 180 days and MAX is one year (365 days). Convert records
-      // created by older releases so no paid plan remains unlimited.
-      await pool.query(`
-        UPDATE ${SUBSCRIPTIONS_TABLE}
-        SET expires_at = starts_at + INTERVAL '365 days', updated_at = NOW()
-        WHERE plan_id = 'max'
-          AND expires_at IS NULL
-      `);
-
-      await pool.query(`
-        UPDATE ${SUBSCRIPTIONS_TABLE}
-        SET expires_at = starts_at + INTERVAL '180 days', updated_at = NOW()
-        WHERE plan_id = 'premium'
-          AND (
-            expires_at IS NULL
-            OR expires_at < starts_at + INTERVAL '180 days'
-          )
-      `);
-
-      await pool.query(`
-        UPDATE ${SUBSCRIPTIONS_TABLE}
-        SET expires_at = starts_at + INTERVAL '30 days', updated_at = NOW()
-        WHERE plan_id = 'pro'
-          AND expires_at IS NULL
-      `);
-
-      await pool.query(`
-        ALTER TABLE ${SUBSCRIPTIONS_TABLE}
-        ALTER COLUMN expires_at SET NOT NULL
-      `);
-
       await pool.query(`
         CREATE INDEX IF NOT EXISTS theziess_subscriptions_v5_user_status_idx
           ON ${SUBSCRIPTIONS_TABLE}(user_key, status, expires_at DESC)
@@ -164,6 +182,10 @@ export async function ensureSchema() {
         CREATE INDEX IF NOT EXISTS theziess_compression_events_v1_user_created_idx
           ON ${COMPRESSION_EVENTS_TABLE}(user_key, created_at DESC)
       `);
+
+
+      // Never let a legacy paid-plan migration prevent Telegram login.
+      await migratePaidPlanDurationsSafely();
     })().catch((error) => {
       schemaPromise = null;
       throw error;

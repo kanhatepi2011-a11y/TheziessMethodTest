@@ -185,3 +185,10 @@ All notable changes to the NoBlur project are documented in this file.
 - PREMIUM changed from 120 to 180 days.
 - MAX changed from unlimited to one year (365 days).
 - Migrates existing paid subscriptions and enforces expiration for every paid plan.
+
+## V13 — Telegram login recovery
+
+- Removed paid-plan ALTER TABLE migration from the authentication-critical path.
+- Made legacy plan-duration migration non-blocking.
+- Clear stale OAuth cookies after a failed callback.
+- Added safer callback diagnostics and a return-to-app error screen.
