@@ -8,6 +8,7 @@ const MAX_JSON_NODES = 180000;
 const INITIAL_PROBE_BYTES = 2 * 1024 * 1024;
 const END_PROBE_BYTES = 4 * 1024 * 1024;
 const MAX_MOOV_BYTES = 10 * 1024 * 1024;
+const MAX_SUPPORTED_FPS = 10000;
 
 const BROWSER_HEADERS = {
   "User-Agent":
@@ -356,6 +357,44 @@ function toFiniteNumber(...values) {
   return null;
 }
 
+function normalizeFpsValue(...values) {
+  for (const value of values) {
+    if (value === null || value === undefined || value === "") continue;
+    const match = String(value).trim().match(/-?\d+(?:\.\d+)?/);
+    const number = match ? Number(match[0]) : Number(value);
+    if (Number.isFinite(number) && number > 0 && number <= MAX_SUPPORTED_FPS) {
+      return number;
+    }
+  }
+  return null;
+}
+
+export function extractClaimedFps(...values) {
+  const text = values
+    .filter((value) => typeof value === "string" && value.trim())
+    .join(" ");
+  if (!text) return null;
+
+  // Prefer an explicit #120fps-style hashtag over looser caption text.
+  const patterns = [
+    /#\s*(\d+(?:\.\d+)?)\s*fps\b/gi,
+    /\b(\d+(?:\.\d+)?)\s*fps\b/gi,
+    /\b(\d+(?:\.\d+)?)\s*frames?\s*(?:\/|per)\s*second\b/gi,
+    // Accept the common "FPA" typo only when no real FPS expression exists.
+    /\b(\d+(?:\.\d+)?)\s*fpa\b/gi,
+  ];
+
+  for (const pattern of patterns) {
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      const fps = normalizeFpsValue(match[1]);
+      if (fps) return fps;
+    }
+  }
+
+  return null;
+}
+
 function chooseBitrateEntry(video) {
   const entries = video?.bitrateInfo || video?.bitrate_info || video?.bitRateInfo;
   if (!Array.isArray(entries) || entries.length === 0) return null;
@@ -370,6 +409,17 @@ function chooseBitrateEntry(video) {
 function extractVideoData(item, html, finalUrl) {
   const video = item?.video || {};
   const bitrateEntry = chooseBitrateEntry(video);
+  const title = String(item?.desc || item?.title || "").trim();
+  const metadataFps = normalizeFpsValue(
+    bitrateEntry?.FPS,
+    bitrateEntry?.fps,
+    video.fps,
+    video.frameRate,
+    video.frame_rate,
+    video.frameRateNum,
+    video.frame_rate_num,
+    findJsonNumber(html, ["FPS", "fps", "frameRate", "frame_rate"]),
+  );
   const mediaUrl =
     pickUrl(bitrateEntry?.PlayAddr) ||
     pickUrl(bitrateEntry?.playAddr) ||
@@ -388,7 +438,7 @@ function extractVideoData(item, html, finalUrl) {
 
   return {
     videoId,
-    title: String(item?.desc || item?.title || "").trim(),
+    title,
     author: String(author?.uniqueId || author?.unique_id || author?.nickname || "").trim(),
     width: toFiniteNumber(
       bitrateEntry?.PlayAddr?.Width,
@@ -410,13 +460,17 @@ function extractVideoData(item, html, finalUrl) {
       item?.duration,
       findJsonNumber(html, ["duration", "videoDuration"]),
     ),
-    fps: toFiniteNumber(
-      bitrateEntry?.FPS,
-      bitrateEntry?.fps,
-      video.fps,
-      video.frameRate,
-      video.frame_rate,
-      findJsonNumber(html, ["FPS", "fps", "frameRate"]),
+    fps: metadataFps,
+    fpsSource: metadataFps ? "tiktok_metadata" : null,
+    claimedFps: extractClaimedFps(title),
+    frameCount: toFiniteNumber(
+      video.frameCount,
+      video.frame_count,
+      video.nbFrames,
+      video.nb_frames,
+      bitrateEntry?.FrameCount,
+      bitrateEntry?.frameCount,
+      findJsonNumber(html, ["frameCount", "frame_count", "nbFrames", "nb_frames"]),
     ),
     bitrate: toFiniteNumber(
       bitrateEntry?.Bitrate,
@@ -810,6 +864,8 @@ function parseMp4Moov(moovBytes) {
     const minf = childBox(moovBytes, mdia, "minf");
     const stbl = minf ? childBox(moovBytes, minf, "stbl") : null;
     const stts = stbl ? childBox(moovBytes, stbl, "stts") : null;
+    const stsz = stbl ? childBox(moovBytes, stbl, "stsz") : null;
+    const stz2 = stbl ? childBox(moovBytes, stbl, "stz2") : null;
     const stsd = stbl ? childBox(moovBytes, stbl, "stsd") : null;
 
     let sampleCount = 0;
@@ -826,12 +882,20 @@ function parseMp4Moov(moovBytes) {
       }
     }
 
+    const tableSampleCount =
+      (stsz ? readUint32(view, stsz.contentStart + 8) : 0) ||
+      (stz2 ? readUint32(view, stz2.contentStart + 8) : 0) ||
+      0;
+    if (!sampleCount && tableSampleCount) sampleCount = tableSampleCount;
+
     const timescale = mediaTiming?.timescale || movieTiming?.timescale || 0;
     const durationTicks = mediaTiming?.duration || sampleDuration || movieTiming?.duration || 0;
     const duration = timescale && durationTicks ? durationTicks / timescale : null;
-    const fps = timescale && sampleCount && sampleDuration
+    const fpsFromTiming = timescale && sampleCount && sampleDuration
       ? (sampleCount * timescale) / sampleDuration
       : null;
+    const fpsFromCount = sampleCount && duration ? sampleCount / duration : null;
+    const fps = normalizeFpsValue(fpsFromTiming, fpsFromCount);
 
     let width = null;
     let height = null;
@@ -851,7 +915,7 @@ function parseMp4Moov(moovBytes) {
       width: Number.isFinite(width) && width > 0 ? Math.round(width) : null,
       height: Number.isFinite(height) && height > 0 ? Math.round(height) : null,
       duration: Number.isFinite(duration) && duration > 0 ? duration : null,
-      fps: Number.isFinite(fps) && fps > 0 && fps < 1000 ? fps : null,
+      fps,
       codec,
     };
   }
@@ -1023,6 +1087,9 @@ export default async function handler(req, res) {
         height: null,
         duration: null,
         fps: null,
+        fpsSource: null,
+        claimedFps: extractClaimedFps(oEmbed.title),
+        frameCount: null,
         bitrate: null,
         fileSize: null,
         codec: "",
@@ -1043,6 +1110,29 @@ export default async function handler(req, res) {
       normalizeBitrate(pageData.bitrate) ||
       (fileSize && duration ? (fileSize * 8) / duration : null);
 
+    const fpsFromFrameCount = pageData.frameCount && duration
+      ? Number(pageData.frameCount) / Number(duration)
+      : null;
+    const detectedFps = normalizeFpsValue(
+      probe.metadata?.fps,
+      pageData.fps,
+      fpsFromFrameCount,
+    );
+    const claimedFps = extractClaimedFps(
+      pageData.title,
+      oEmbed?.title,
+    ) || normalizeFpsValue(pageData.claimedFps);
+    const fps = detectedFps || claimedFps;
+    const fpsSource = detectedFps
+      ? (probe.metadata?.fps ? "mp4" : pageData.fpsSource || "tiktok_metadata")
+      : claimedFps
+        ? "caption_claim"
+        : null;
+
+    const fpsNote = fpsSource === "caption_claim"
+      ? `TikTok did not expose the encoded FPS. ${fps} FPS was read from the caption/hashtag, so it is a claimed value and may differ from the actual file.`
+      : "TikTok can hide the original media stream for private, restricted or protected posts. Missing values are shown as unavailable instead of being guessed.";
+
     return res.status(200).json({
       ok: true,
       video: {
@@ -1057,7 +1147,9 @@ export default async function handler(req, res) {
           height: probe.metadata?.height || pageData.height || null,
         },
         bitrate: bitrate ? Math.round(bitrate) : null,
-        fps: probe.metadata?.fps || pageData.fps || null,
+        fps: fps || null,
+        fpsSource,
+        fpsExact: Boolean(detectedFps),
         duration: duration || null,
         fileSize: fileSize ? Math.round(fileSize) : null,
         codec: probe.metadata?.codec || pageData.codec || null,
@@ -1065,12 +1157,11 @@ export default async function handler(req, res) {
       availability: {
         resolution: Boolean(probe.metadata?.width || pageData.width),
         bitrate: Boolean(bitrate),
-        fps: Boolean(probe.metadata?.fps || pageData.fps),
+        fps: Boolean(fps),
         duration: Boolean(duration),
         fileSize: Boolean(fileSize),
       },
-      note:
-        "TikTok can hide the original media stream for private, restricted or protected posts. Missing values are shown as unavailable instead of being guessed.",
+      note: fpsNote,
     });
   } catch (error) {
     console.error("TikTok video check failed:", {

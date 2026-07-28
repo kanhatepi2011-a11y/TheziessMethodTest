@@ -1,0 +1,7 @@
+TheZiess Method - TikTok FPS Detection V16
+
+- Improved MP4 FPS detection using stts plus stsz/stz2 sample counts.
+- Supports detected FPS values from 1 through 10,000 FPS instead of rejecting values at 1,000 FPS.
+- Reads explicit caption/hashtag claims such as #30fps, #60fps, #120fps, #1200fps and #6000fps when TikTok hides encoded FPS.
+- Caption-derived FPS is clearly labelled "Claimed in caption" and is not presented as exact encoded metadata.
+- Actual MP4 or TikTok metadata always takes priority over caption claims.

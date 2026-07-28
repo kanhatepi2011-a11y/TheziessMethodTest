@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractTikTokDataFromHtml } from "../api/tiktok/check.js";
+import { extractClaimedFps, extractTikTokDataFromHtml } from "../api/tiktok/check.js";
 
 describe("TikTok video checker metadata parser", () => {
   it("extracts resolution, bitrate, fps, duration and size", () => {
@@ -46,5 +46,17 @@ describe("TikTok video checker metadata parser", () => {
     expect(result.fps).toBe(30);
     expect(result.duration).toBe(15);
     expect(result.fileSize).toBe(2718750);
+  });
+});
+
+
+describe("TikTok FPS caption fallback", () => {
+  it("reads an explicit FPS hashtag before a typo-like FPA value", () => {
+    expect(extractClaimedFps("Test 600Fpa 😀 #120fps")).toBe(120);
+  });
+
+  it("supports high claimed frame-rate values without forcing a common preset", () => {
+    expect(extractClaimedFps("Experimental render #1200fps")).toBe(1200);
+    expect(extractClaimedFps("Test clip 6000 FPS")).toBe(6000);
   });
 });

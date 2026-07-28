@@ -918,6 +918,11 @@ function resetTikTokVideoResult() {
     if (videoCheckResult) videoCheckResult.hidden = true;
     const thumbnail = document.getElementById("videoCheckThumbnail");
     const fallback = document.getElementById("videoCheckThumbnailFallback");
+    const fpsSource = document.getElementById("videoCheckFpsSource");
+    if (fpsSource) {
+        fpsSource.textContent = "";
+        fpsSource.hidden = true;
+    }
     if (thumbnail) {
         thumbnail.hidden = true;
         thumbnail.removeAttribute("src");
@@ -939,6 +944,19 @@ function renderTikTokVideoResult(payload) {
     setElementText("videoCheckResolution", formatCheckedResolution(video.resolution));
     setElementText("videoCheckBitrate", formatCheckedBitrate(video.bitrate));
     setElementText("videoCheckFps", formatCheckedFps(video.fps));
+    const fpsSource = document.getElementById("videoCheckFpsSource");
+    if (fpsSource) {
+        if (video.fpsSource === "caption_claim") {
+            fpsSource.textContent = "Claimed in caption";
+            fpsSource.hidden = false;
+        } else if (video.fpsExact && video.fps) {
+            fpsSource.textContent = "Detected from video";
+            fpsSource.hidden = false;
+        } else {
+            fpsSource.textContent = "";
+            fpsSource.hidden = true;
+        }
+    }
     setElementText("videoCheckDuration", formatCheckedDuration(video.duration));
     setElementText(
         "videoCheckFileSize",
@@ -1065,7 +1083,12 @@ function initializeTikTokVideoChecker() {
                 .filter(([, available]) => !available)
                 .map(([name]) => name);
 
-            if (missing.length > 0) {
+            if (data.video?.fpsSource === "caption_claim") {
+                setVideoCheckStatus(
+                    `Video checked. ${formatCheckedFps(data.video.fps)} was claimed in the caption; TikTok did not expose the encoded FPS.`,
+                    "warning",
+                );
+            } else if (missing.length > 0) {
                 setVideoCheckStatus(
                     `Video checked. TikTok did not expose: ${missing.join(", ")}.`,
                     "warning",

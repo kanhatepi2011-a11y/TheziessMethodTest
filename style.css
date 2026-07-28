@@ -2977,6 +2977,17 @@ body[data-app-view="check"] .container {
   overflow-wrap: anywhere;
 }
 
+.video-check-metric-source {
+  display: block;
+  max-width: 100%;
+  margin-top: -1px;
+  color: #c4b5fd;
+  font: 700 9px/1.35 "Noto Sans Khmer", system-ui, sans-serif;
+  letter-spacing: .02em;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
 .video-check-note {
   display: flex;
   align-items: flex-start;
