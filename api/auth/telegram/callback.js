@@ -18,6 +18,10 @@ import {
   parseCookies,
 } from "../../_session.js";
 
+import {
+  notifyAdminsOfTelegramLogin,
+} from "../../_login-alert.js";
+
 function firstQueryValue(value) {
   return Array.isArray(value)
     ? value[0]
@@ -290,6 +294,20 @@ export default async function handler(req, res) {
         "telegram_pkce_verifier",
       ),
     ]);
+
+    // Alert configured Telegram admins after authentication succeeds.
+    // Notification failures are isolated so users can always finish login.
+    try {
+      await notifyAdminsOfTelegramLogin({
+        databaseUser,
+        telegramUser,
+      });
+    } catch (alertError) {
+      console.warn("Telegram login alert skipped:", {
+        code: alertError?.code || "UNKNOWN",
+        message: alertError?.message || String(alertError),
+      });
+    }
 
     // Save a browser-side copy of the public Telegram profile before
     // returning home. The signed HttpOnly cookie remains the real session,
