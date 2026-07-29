@@ -44,7 +44,7 @@
     }
   ],
   "functions": {
-    "api/tiktok/check.js": {
+    "api/**/*.js": {
       "maxDuration": 30
     }
   }

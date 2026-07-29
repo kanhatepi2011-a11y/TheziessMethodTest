@@ -210,3 +210,10 @@ All notable changes to the NoBlur project are documented in this file.
 - Added official Inbox/Draft upload initialization, direct browser-to-TikTok chunk transfer, status polling and cancellation.
 - Added connected TikTok identity UI, explicit consent review modal, upload progress and Inbox completion guidance.
 - Added `/terms` and `/privacy`, versioned PostgreSQL tables and TikTok integration tests/documentation.
+
+## V21 — Consolidated Vercel API router
+
+- Reduced the root `/api` directory from 25 files to one catch-all Vercel Function.
+- Moved existing handlers and private helpers to `server/api/` without changing public API URLs.
+- Added `api/[...route].js` to dispatch all Telegram, subscription, database and TikTok endpoints.
+- Updated Vercel function configuration and test import paths.
