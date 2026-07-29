@@ -6,7 +6,7 @@ const scriptDir = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const projectRoot = resolve(scriptDir, "..");
 const apiDir = join(projectRoot, "api");
 const legacyServerApiDir = join(projectRoot, "server", "api");
-const keepFile = "[...route].js";
+const keepFile = "router.js";
 
 if (!existsSync(apiDir)) {
   throw new Error(`Missing API directory: ${apiDir}`);

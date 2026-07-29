@@ -10,7 +10,7 @@ New structure
 -------------
 The root /api directory now contains exactly one Vercel Function:
 
-  api/[...route].js
+  api/router.js
 
 All existing route handlers and private helpers were moved without rewriting
 their internal behavior to:
@@ -38,7 +38,7 @@ Examples:
 
 Vercel configuration
 --------------------
-vercel.json now applies maxDuration 30 to api/[...route].js.
+vercel.json now applies maxDuration 30 to api/router.js.
 
 Result
 ------

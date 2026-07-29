@@ -35,6 +35,10 @@
   ],
   "rewrites": [
     {
+      "source": "/api/:route*",
+      "destination": "/api/router"
+    },
+    {
       "source": "/terms",
       "destination": "/terms.html"
     },
@@ -44,7 +48,7 @@
     }
   ],
   "functions": {
-    "api/[...route].js": {
+    "api/router.js": {
       "maxDuration": 30
     }
   }

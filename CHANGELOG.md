@@ -1,3 +1,10 @@
+
+## V23 - Vercel API 404 routing fix
+
+- Replaced the unreliable wildcard function `api/[...route].js` with the fixed entrypoint `api/router.js`.
+- Added a Vercel rewrite from `/api/:route*` to `/api/router`; the captured path is dispatched through `req.query.route`.
+- Preserved every existing public API URL while keeping the deployment at one Serverless Function.
+- Updated the cleanup script to delete legacy API files and retain only `api/router.js`.
 # Changelog
 
 All notable changes to the NoBlur project are documented in this file.
@@ -215,11 +222,11 @@ All notable changes to the NoBlur project are documented in this file.
 
 - Reduced the root `/api` directory from 25 files to one catch-all Vercel Function.
 - Moved existing handlers and private helpers to `server/api/` without changing public API URLs.
-- Added `api/[...route].js` to dispatch all Telegram, subscription, database and TikTok endpoints.
+- Added `api/router.js` to dispatch all Telegram, subscription, database and TikTok endpoints.
 - Updated Vercel function configuration and test import paths.
 
 ## V22 — Vercel Hobby function limit cleanup
-- Kept a single Vercel Function entrypoint at `api/[...route].js`.
+- Kept a single Vercel Function entrypoint at `api/router.js`.
 - Renamed internal handlers from `server/api` to `server/routes`.
 - Restricted `vercel.json` function configuration to the catch-all entrypoint.
 - Added `.vercelignore` safeguards for stale API trees.
