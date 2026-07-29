@@ -41,7 +41,7 @@
 
   <link
     rel="stylesheet"
-    href="style.css?v=20260728-fps-verified-v17"
+    href="style.css?v=20260729-tiktok-posting-v20"
   >
 
   <link
@@ -670,7 +670,7 @@
 
             <article class="video-check-metric">
               <i class="ri-time-line" aria-hidden="true"></i>
-              <span>Duration</span>
+              <span>រយៈពេល</span>
               <strong id="videoCheckDuration">—</strong>
             </article>
 
@@ -753,6 +753,10 @@
     TheZiess Method · ឧបករណ៍កែគុណភាពវីដេអូ NoBlur
 
     <span id="changelogContainer"></span>
+    <span class="footer-legal-links">
+      <a href="/terms">Terms</a>
+      <a href="/privacy">Privacy</a>
+    </span>
   </footer>
 
   <!-- 60 FPS confirmation modal -->
@@ -1097,6 +1101,42 @@
           </div>
         </section>
 
+        <section class="profile-tiktok-card" aria-label="TikTok account connection">
+          <div class="profile-tiktok-heading">
+            <div class="profile-tiktok-brand" aria-hidden="true">
+              <i class="ri-tiktok-fill"></i>
+            </div>
+            <div>
+              <span>គណនី TIKTOK</span>
+              <strong id="tiktokAccountName">មិនទាន់ភ្ជាប់ TikTok</strong>
+              <small id="tiktokAccountStatus">ភ្ជាប់ TikTok ដើម្បីផ្ញើវីដេអូទៅ Inbox/Draft</small>
+            </div>
+            <img
+              id="tiktokAccountAvatar"
+              class="profile-tiktok-avatar"
+              alt="Connected TikTok profile photo"
+              referrerpolicy="no-referrer"
+              hidden
+            >
+          </div>
+
+          <div class="profile-tiktok-scopes">
+            <span>សិទ្ធិ / Permissions</span>
+            <strong id="tiktokGrantedScopes">user.info.basic · video.upload</strong>
+          </div>
+
+          <div class="profile-tiktok-actions">
+            <button type="button" class="modal-btn tiktok-connect-button" id="connectTikTokBtn">
+              <i class="ri-tiktok-fill" aria-hidden="true"></i>
+              <span>ភ្ជាប់ TikTok / Connect</span>
+            </button>
+            <button type="button" class="modal-btn tiktok-disconnect-button" id="disconnectTikTokBtn" hidden>
+              <i class="ri-link-unlink-m" aria-hidden="true"></i>
+              ផ្ដាច់ TikTok / Disconnect
+            </button>
+          </div>
+        </section>
+
         <section class="profile-subscription-card">
           <div class="profile-subscription-heading">
             <div>
@@ -1227,7 +1267,7 @@
           </div>
 
           <div>
-            <span>Duration</span>
+            <span>រយៈពេល</span>
 
             <strong id="paymentDuration">
               —
@@ -1265,6 +1305,91 @@
     </div>
   </div>
 
+  <!-- TikTok Inbox/Draft upload review -->
+  <div
+    class="modal-overlay"
+    id="tiktokUploadModal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="tiktokUploadModalTitle"
+  >
+    <div class="modal-card tiktok-upload-modal-card">
+      <div class="modal-header">
+        <div class="modal-header-left">
+          <i class="ri-tiktok-fill" aria-hidden="true"></i>
+          <span class="modal-title" id="tiktokUploadModalTitle">ផ្ញើទៅ TikTok Inbox/Draft</span>
+        </div>
+        <button type="button" class="modal-close-btn" id="tiktokUploadCloseBtn" aria-label="បិទផ្ទាំង TikTok upload">
+          <i class="ri-close-fill" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <div class="modal-body tiktok-upload-body">
+        <div class="tiktok-upload-review-grid">
+          <video id="tiktokUploadPreview" class="tiktok-upload-preview" controls playsinline preload="metadata"></video>
+
+          <div class="tiktok-upload-review-copy">
+            <span class="tiktok-upload-eyebrow">ពិនិត្យមុនផ្ញើ / REVIEW</span>
+            <strong id="tiktokUploadFilename">video.mp4</strong>
+
+            <div class="tiktok-upload-metadata">
+              <div><span>ទំហំឯកសារ</span><strong id="tiktokUploadSize">—</strong></div>
+              <div><span>Resolution</span><strong id="tiktokUploadResolution">—</strong></div>
+              <div><span>រយៈពេល</span><strong id="tiktokUploadDuration">—</strong></div>
+              <div><span>FPS ពិត</span><strong id="tiktokUploadFps">—</strong></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tiktok-upload-account-row">
+          <img id="tiktokUploadAccountAvatar" alt="TikTok account avatar" referrerpolicy="no-referrer" hidden>
+          <i class="ri-tiktok-fill" aria-hidden="true"></i>
+          <div>
+            <span>គណនីទទួល Draft</span>
+            <strong id="tiktokUploadAccountName">TikTok User</strong>
+          </div>
+        </div>
+
+        <p class="tiktok-upload-explanation">
+          វីដេអូនេះនឹងត្រូវផ្ញើទៅ TikTok Inbox/Draft។ វាមិនទាន់ Public ទេ។
+          Open the TikTok app after upload, review the draft and finish posting it yourself.
+        </p>
+
+        <label class="tiktok-upload-consent">
+          <input type="checkbox" id="tiktokUploadConsent">
+          <span>ខ្ញុំជាម្ចាស់វីដេអូនេះ ឬមានសិទ្ធិអនុញ្ញាតឱ្យបង្ហោះទៅ TikTok។</span>
+        </label>
+
+        <section class="tiktok-upload-progress" id="tiktokUploadProgress" hidden aria-live="polite">
+          <div class="tiktok-upload-progress-heading">
+            <strong id="tiktokUploadStage">Ready</strong>
+            <span id="tiktokUploadPercent">0%</span>
+          </div>
+          <div class="tiktok-upload-progress-track"><div id="tiktokUploadProgressBar"></div></div>
+          <small id="tiktokUploadBytes">0 KB / 0 KB</small>
+        </section>
+
+        <p class="tiktok-upload-error" id="tiktokUploadError" role="alert" hidden></p>
+
+        <section class="tiktok-upload-success" id="tiktokUploadSuccess" hidden>
+          <i class="ri-checkbox-circle-fill" aria-hidden="true"></i>
+          <p id="tiktokUploadSuccessMessage">
+            Upload complete. Open the TikTok app, check your Inbox notification, review the video and finish posting it.
+          </p>
+        </section>
+      </div>
+
+      <div class="modal-actions tiktok-upload-actions">
+        <button type="button" class="modal-btn modal-btn-cancel" id="tiktokUploadCancelBtn">បោះបង់ / Cancel</button>
+        <button type="button" class="modal-btn modal-btn-cancel" id="tiktokUploadRetryBtn" hidden>សាកម្ដងទៀត / Retry</button>
+        <button type="button" class="modal-btn modal-btn-confirm" id="tiktokUploadConfirmBtn" disabled>
+          <i class="ri-upload-cloud-2-fill" aria-hidden="true"></i>
+          ផ្ញើទៅ TikTok / Upload
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Subscription access lock -->
   <div
     class="access-lock"
@@ -1297,7 +1422,7 @@
 
   <script
     type="module"
-    src="app.js?v=20260728-fps-bitrate-v18"
+    src="app.js?v=20260729-tiktok-posting-v20"
   ></script>
 </body>
 </html>

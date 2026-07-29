@@ -1,6 +1,6 @@
 # NoBlur — Post TikTok Videos Without the Blur
 
-NoBlur is a client-side web application that processes MP4 and MOV video containers locally in your browser to bypass aggressive server-side recompression when uploading to TikTok. It uses MP4 sample-table frame density inflation as its core bypass mechanism, with an optional 60fps VFI interpolation path. All processing stays on-device — no data is uploaded to external servers.
+NoBlur is a browser-based video-processing application for THEZIESS METHOD. MP4 and MOV processing stays local on the device. The optional official TikTok Inbox/Draft feature sends a separate clean artifact directly from the browser to TikTok only after explicit user consent; THEZIESS METHOD does not proxy or permanently store the video bytes.
 
 ![Preview](preview.webp)
 
@@ -30,7 +30,7 @@ When the Interpolation toggle is enabled, FFmpeg.wasm is lazy-loaded to run moti
 - **Codec-Aware Inflation:** Per-codec dummy sample sizes (avc1/avc3: 8B, hvc1/hev1: 16B, vp09/av01: 4B), VFR support, and co64 for 64-bit chunk offsets.
 - **Single-Pass Pipeline:** Container normalization followed by sample-table inflation in one operation.
 - **Selectable Output Resolution:** 1080p or 2K (1440p) when interpolation is enabled. VFI processes at 1080p then upscales to 2K.
-- **Client-Side Only:** 100% browser-local. Zero server upload.
+- **Local Processing:** FFmpeg.wasm and MP4 processing run in the browser. Optional TikTok posting uploads the clean artifact directly to TikTok, not to THEZIESS METHOD servers.
 - **Multi-Format & Codec Input:** MP4 and MOV with H.264, HEVC/H.265, and others.
 - **Bulk Processing Queue:** Drag/drop or select multiple videos; processed sequentially.
 - **Screen Wake Lock:** Keeps display active during processing; re-acquires on visibility change.
@@ -92,7 +92,7 @@ GitHub Pages serves files from the repo root directly (no Jekyll processing due 
 
 ## Disclaimer
 
-This utility rewrites MP4 container metadata using sample-table inflation to bypass platform recompression. No video or audio data is re-encoded in the main pipeline, preserving original quality. The interpolation path (optional) uses FFmpeg.wasm for frame rate conversion only. Designed to work with valid MP4 and MOV containers. Always keep backups of your original video files before processing.
+This utility rewrites MP4 container metadata for its local-download workflow. No video or audio data is re-encoded in the main non-interpolation path. The optional TikTok API flow deliberately uses a separate, truthful pre-inflation artifact and requires explicit consent before sending it directly to TikTok Inbox/Draft. Always keep backups of original files and upload only content you own or have permission to use.
 
 See [CHANGELOG.md](./CHANGELOG.md) for the full release history.
 
@@ -199,3 +199,246 @@ command menu is installed for that chat.
 Webhook requests are checked with Telegram's
 `X-Telegram-Bot-Api-Secret-Token` header. Never commit the real bot token,
 setup key, webhook secret, session secret or database URL to GitHub.
+
+---
+
+## Official TikTok Login Kit + Content Posting API
+
+This repository includes a Sandbox-first integration that links TikTok to an
+already authenticated Telegram user. It uses TikTok's official OAuth 2.0 and
+Content Posting API only. It does not scrape TikTok, collect TikTok passwords,
+use browser cookies, or expose TikTok tokens to the frontend.
+
+### What the integration does
+
+1. A Telegram-authenticated user connects their own TikTok account.
+2. The backend requests only `user.info.basic` and `video.upload`.
+3. The backend stores access and refresh tokens encrypted with AES-256-GCM.
+4. The browser prepares a separate clean TikTok artifact before the existing
+   local sample-table inflation step.
+5. The user reviews the real resolution, duration and FPS, checks a consent
+   checkbox, and explicitly starts the upload.
+6. The backend creates an official TikTok Inbox upload session.
+7. The browser sends the video bytes directly to TikTok's short-lived HTTPS
+   upload URL in sequential chunks. Video bytes never pass through Vercel or
+   PostgreSQL.
+8. The backend polls the official status endpoint. On success the UI tells the
+   user to open TikTok, review the Inbox/Draft notification, and finish posting.
+
+The integration does **not** claim that an Inbox upload is already public.
+Production access remains subject to TikTok review and approval.
+
+### TikTok Developer Portal configuration
+
+Create or open the app in TikTok for Developers and configure:
+
+- **Platform:** Web
+- **Products:** Login Kit and Content Posting API
+- **Content Posting mode:** Upload API / Upload to TikTok
+- **Redirect URI:**
+  `https://theziessmethod.site/api/auth/tiktok/callback`
+- **Requested scopes:** `user.info.basic`, `video.upload`
+- **Terms URL:** `https://theziessmethod.site/terms`
+- **Privacy URL:** `https://theziessmethod.site/privacy`
+
+Do not add `user.info.profile`, `user.info.stats`, `video.list`, or
+`video.publish` for this first release.
+
+For Sandbox testing, add the TikTok accounts that will test the app as Sandbox
+target users in the Developer Portal. A Sandbox app is not Production approval.
+
+### Required environment variables
+
+```env
+TIKTOK_CLIENT_KEY=
+TIKTOK_CLIENT_SECRET=
+TIKTOK_REDIRECT_URI=https://theziessmethod.site/api/auth/tiktok/callback
+TIKTOK_SCOPES=user.info.basic,video.upload
+TIKTOK_TOKEN_ENCRYPTION_KEY=
+TIKTOK_PUBLIC_URL=https://theziessmethod.site
+```
+
+Generate a strong 32-byte token-encryption key and keep it stable. Examples:
+
+```bash
+openssl rand -base64 32
+```
+
+```powershell
+$bytes = New-Object byte[] 32
+[Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+[Convert]::ToBase64String($bytes)
+```
+
+Never commit the client secret, encryption key, access token, refresh token,
+authorization code, or database URL. Changing the encryption key makes existing
+stored TikTok tokens unreadable, so connected users would need to reconnect.
+
+### Database migration
+
+The application creates these non-destructive versioned tables through
+`api/_db.js`; the same schema is included in `database.sql`:
+
+- `theziess_tiktok_connections_v1` — Telegram user key, TikTok identity,
+  granted scopes, encrypted tokens, token expiry and timestamps.
+- `theziess_tiktok_uploads_v1` — owner, publish ID, filename, byte count,
+  MIME type, normalized status, safe error reference and timestamps.
+
+No video bytes are stored in PostgreSQL. Existing users, subscriptions,
+payments, free trials and compression history are preserved.
+
+### TikTok API routes
+
+```text
+GET  /api/auth/tiktok
+GET  /api/auth/tiktok/callback
+GET  /api/tiktok/account
+POST /api/tiktok/disconnect
+POST /api/tiktok/upload/init
+POST /api/tiktok/upload/status
+POST /api/tiktok/upload/cancel
+```
+
+`/api/tiktok/upload/init` accepts only filename, byte size and MIME type. It
+returns a short-lived TikTok upload URL, publish ID and safe chunk plan. The
+browser uploads the binary directly to TikTok. `/cancel` only marks the local
+upload record cancelled because the official FILE_UPLOAD flow does not expose a
+client-side credential or application endpoint for deleting an already issued
+upload URL.
+
+### Clean TikTok artifact and compatibility validation
+
+The existing inflated local-download artifact is preserved. It is never sent
+through the official TikTok upload flow. Before inflation the app creates a
+separate `tiktokUploadBlob` containing real media timing and real frames only.
+It validates:
+
+- MP4/MOV/WebM MIME type;
+- H.264, H.265, VP8 or VP9 when codec metadata is available;
+- real FPS from MP4 timing tables between 23 and 60;
+- both dimensions between 360 and 4096 pixels;
+- duration greater than zero and no longer than 10 minutes;
+- file size no larger than 4 GB.
+
+The app does not infer upload FPS from bitrate, hashtags or inflated sample
+counts and does not add a watermark or promotional overlay.
+
+### Upload chunk behavior
+
+- Files below 5 MB use one complete chunk.
+- A one-chunk upload between 5 MB and 64 MB uses the complete file size.
+- Multi-chunk uploads use sequential 32 MB chunks.
+- A remainder below 5 MB is merged into the final chunk.
+- No chunk exceeds TikTok's 64 MB normal-chunk limit.
+- The browser sends accurate `Content-Type` and `Content-Range`; the browser
+  generates `Content-Length` from each Blob because JavaScript cannot set that
+  forbidden header manually.
+- `AbortController` cancels the active browser transfer.
+
+Only one active TikTok upload is allowed per user. Upload initialization is
+rate-limited in PostgreSQL.
+
+### Local development
+
+1. Copy `.env.example` to the environment used by the Vercel development
+   runtime and provide all Telegram, PostgreSQL and TikTok values.
+2. The production redirect URI must exactly match the Developer Portal. For a
+   separate local TikTok app, register its HTTPS development callback instead
+   of silently changing the Production callback.
+3. Install and run:
+
+```bash
+npm ci
+npm run dev
+```
+
+Vite serves the frontend; Vercel Functions should be tested with the Vercel
+local runtime when OAuth/API endpoints are required.
+
+### Vercel deployment
+
+1. Add all variables from `.env.example` in **Vercel → Project → Settings →
+   Environment Variables** for the Production environment.
+2. Confirm the production domain is `https://theziessmethod.site`.
+3. Deploy the repository root. Do not deploy the accidental application copy
+   inside `ffmpeg-core-mt/`.
+4. Confirm these public URLs load directly and after refresh:
+   - `https://theziessmethod.site/terms`
+   - `https://theziessmethod.site/privacy`
+5. Log in with Telegram, connect a Sandbox target TikTok account, process a
+   compatible video, and perform the manual test below.
+
+Authentication and TikTok API responses use `Cache-Control: private, no-store`.
+COOP/COEP headers required by FFmpeg.wasm remain enabled.
+
+### Manual Sandbox test and review-demo recording
+
+Record one continuous demo that shows:
+
+1. The Terms and Privacy pages on the production domain.
+2. Telegram login succeeding.
+3. The separate **Connect TikTok** action.
+4. TikTok's official consent screen showing only the requested scopes.
+5. The connected TikTok display name and avatar in THEZIESS METHOD.
+6. Processing a normal H.264 MP4 and showing the clean artifact's real FPS.
+7. The review modal, unchecked consent state, then explicit user consent.
+8. Direct upload progress and cancellation/retry behavior.
+9. Successful processing status and the instruction to open the TikTok app.
+10. The TikTok Inbox/Draft notification and the user manually reviewing and
+    completing the post in TikTok.
+11. Disconnecting TikTok and confirming the account is no longer connected.
+
+Use only content owned by the test account or content the tester has permission
+to upload. Never include real secrets or tokens in the recording.
+
+### Troubleshooting
+
+**Redirect mismatch**
+
+The callback in TikTok Developer Portal, `TIKTOK_REDIRECT_URI`, and the OAuth
+request must be identical, including HTTPS, hostname, path and trailing slash
+behavior. The configured callback is:
+
+```text
+https://theziessmethod.site/api/auth/tiktok/callback
+```
+
+**Permission or scope error**
+
+Confirm Login Kit and Content Posting API are enabled and the Sandbox target
+user approved both `user.info.basic` and `video.upload`. Disconnect and connect
+again after changing scopes.
+
+**Expired or unreadable token**
+
+The backend refreshes access tokens before API calls. Reconnect if the refresh
+token expired, was revoked, or the encryption key changed.
+
+**Upload rejected before transfer**
+
+Process the source again and verify the clean artifact is 23–60 real FPS, uses
+supported dimensions/codec/MIME type, is within the allowed duration and is no
+larger than 4 GB. Old IndexedDB history records that lack a clean TikTok Blob
+cannot be uploaded.
+
+**429 or processing delay**
+
+Wait before retrying. The app applies bounded polling and shows a support
+reference only when TikTok provides a safe `log_id`.
+
+**Upload appears complete but is not public**
+
+This integration sends the video to TikTok Inbox/Draft. Open the TikTok app,
+review the notification and manually finish posting. It does not publish
+silently.
+
+### Verification commands
+
+```bash
+npm test
+npm run lint
+npm run build
+```
+
+TikTok network calls are mocked in automated tests. Real credentials are never
+required by the test suite.

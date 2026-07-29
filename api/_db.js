@@ -34,6 +34,8 @@ const SUBSCRIPTIONS_TABLE = "theziess_subscriptions_v5";
 const FREE_TRIALS_TABLE = "theziess_free_trials_v5";
 const PAYMENTS_TABLE = "theziess_payments_v5";
 const COMPRESSION_EVENTS_TABLE = "theziess_compression_events_v1";
+const TIKTOK_CONNECTIONS_TABLE = "theziess_tiktok_connections_v1";
+const TIKTOK_UPLOADS_TABLE = "theziess_tiktok_uploads_v1";
 
 let schemaPromise;
 let userMigrationPromise;
@@ -235,6 +237,41 @@ export async function ensureSchema() {
       `);
 
       await pool.query(`
+        CREATE TABLE IF NOT EXISTS ${TIKTOK_CONNECTIONS_TABLE} (
+          id BIGSERIAL PRIMARY KEY,
+          user_key TEXT UNIQUE NOT NULL,
+          open_id TEXT NOT NULL,
+          display_name VARCHAR(255),
+          avatar_url TEXT,
+          granted_scopes TEXT NOT NULL,
+          encrypted_access_token TEXT NOT NULL,
+          encrypted_refresh_token TEXT NOT NULL,
+          access_token_expires_at TIMESTAMPTZ NOT NULL,
+          refresh_token_expires_at TIMESTAMPTZ NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS ${TIKTOK_UPLOADS_TABLE} (
+          id BIGSERIAL PRIMARY KEY,
+          user_key TEXT NOT NULL,
+          publish_id VARCHAR(64) UNIQUE NOT NULL,
+          filename VARCHAR(255) NOT NULL,
+          byte_size BIGINT NOT NULL,
+          mime_type VARCHAR(120) NOT NULL,
+          status VARCHAR(64) NOT NULL DEFAULT 'INITIALIZED',
+          tiktok_error_code VARCHAR(120),
+          support_log_id VARCHAR(160),
+          uploaded_bytes BIGINT NOT NULL DEFAULT 0,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          completed_at TIMESTAMPTZ
+        )
+      `);
+
+      await pool.query(`
         CREATE INDEX IF NOT EXISTS theziess_subscriptions_v5_user_status_idx
           ON ${SUBSCRIPTIONS_TABLE}(user_key, status, expires_at DESC)
       `);
@@ -253,6 +290,16 @@ export async function ensureSchema() {
       await pool.query(`
         CREATE INDEX IF NOT EXISTS theziess_compression_events_v1_user_created_idx
           ON ${COMPRESSION_EVENTS_TABLE}(user_key, created_at DESC)
+      `);
+
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS theziess_tiktok_uploads_v1_user_created_idx
+          ON ${TIKTOK_UPLOADS_TABLE}(user_key, created_at DESC)
+      `);
+
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS theziess_tiktok_uploads_v1_user_status_idx
+          ON ${TIKTOK_UPLOADS_TABLE}(user_key, status, updated_at DESC)
       `);
 
 
@@ -1098,4 +1145,200 @@ export async function revokeAdminSubscription({ lookup }) {
     user,
     revoked: result.rows,
   };
+}
+
+
+export async function getTikTokConnection(userId) {
+  await ensureSchema();
+  const result = await pool.query(
+    `SELECT * FROM ${TIKTOK_CONNECTIONS_TABLE} WHERE user_key = $1::TEXT LIMIT 1`,
+    [String(userId)],
+  );
+  return result.rows[0] || null;
+}
+
+export async function saveTikTokConnection({
+  userId,
+  openId,
+  displayName,
+  avatarUrl,
+  grantedScopes,
+  encryptedAccessToken,
+  encryptedRefreshToken,
+  accessTokenExpiresAt,
+  refreshTokenExpiresAt,
+}) {
+  await ensureSchema();
+  const result = await pool.query(
+    `
+      INSERT INTO ${TIKTOK_CONNECTIONS_TABLE} (
+        user_key, open_id, display_name, avatar_url, granted_scopes,
+        encrypted_access_token, encrypted_refresh_token,
+        access_token_expires_at, refresh_token_expires_at, updated_at
+      ) VALUES ($1::TEXT, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+      ON CONFLICT (user_key) DO UPDATE SET
+        open_id = EXCLUDED.open_id,
+        display_name = EXCLUDED.display_name,
+        avatar_url = EXCLUDED.avatar_url,
+        granted_scopes = EXCLUDED.granted_scopes,
+        encrypted_access_token = EXCLUDED.encrypted_access_token,
+        encrypted_refresh_token = EXCLUDED.encrypted_refresh_token,
+        access_token_expires_at = EXCLUDED.access_token_expires_at,
+        refresh_token_expires_at = EXCLUDED.refresh_token_expires_at,
+        updated_at = NOW()
+      RETURNING *
+    `,
+    [
+      String(userId),
+      String(openId),
+      displayName || null,
+      avatarUrl || null,
+      String(grantedScopes || ""),
+      encryptedAccessToken,
+      encryptedRefreshToken,
+      accessTokenExpiresAt,
+      refreshTokenExpiresAt,
+    ],
+  );
+  return result.rows[0];
+}
+
+export async function updateTikTokConnectionTokens({
+  userId,
+  openId,
+  grantedScopes,
+  encryptedAccessToken,
+  encryptedRefreshToken,
+  accessTokenExpiresAt,
+  refreshTokenExpiresAt,
+}) {
+  await ensureSchema();
+  const result = await pool.query(
+    `
+      UPDATE ${TIKTOK_CONNECTIONS_TABLE}
+      SET open_id = $2,
+          granted_scopes = $3,
+          encrypted_access_token = $4,
+          encrypted_refresh_token = $5,
+          access_token_expires_at = $6,
+          refresh_token_expires_at = $7,
+          updated_at = NOW()
+      WHERE user_key = $1::TEXT
+      RETURNING *
+    `,
+    [
+      String(userId),
+      String(openId),
+      String(grantedScopes || ""),
+      encryptedAccessToken,
+      encryptedRefreshToken,
+      accessTokenExpiresAt,
+      refreshTokenExpiresAt,
+    ],
+  );
+  return result.rows[0] || null;
+}
+
+export async function updateTikTokConnectionProfile({ userId, displayName, avatarUrl }) {
+  await ensureSchema();
+  const result = await pool.query(
+    `
+      UPDATE ${TIKTOK_CONNECTIONS_TABLE}
+      SET display_name = $2, avatar_url = $3, updated_at = NOW()
+      WHERE user_key = $1::TEXT
+      RETURNING *
+    `,
+    [String(userId), displayName || null, avatarUrl || null],
+  );
+  return result.rows[0] || null;
+}
+
+export async function deleteTikTokConnection(userId) {
+  await ensureSchema();
+  await pool.query(`DELETE FROM ${TIKTOK_CONNECTIONS_TABLE} WHERE user_key = $1::TEXT`, [String(userId)]);
+}
+
+export async function createTikTokUpload({ userId, publishId, filename, byteSize, mimeType }) {
+  await ensureSchema();
+  const result = await pool.query(
+    `
+      INSERT INTO ${TIKTOK_UPLOADS_TABLE} (
+        user_key, publish_id, filename, byte_size, mime_type, status, updated_at
+      ) VALUES ($1::TEXT, $2, $3, $4, $5, 'INITIALIZED', NOW())
+      RETURNING *
+    `,
+    [String(userId), publishId, filename, byteSize, mimeType],
+  );
+  return result.rows[0];
+}
+
+export async function getTikTokUploadForUser(userId, publishId) {
+  await ensureSchema();
+  const result = await pool.query(
+    `SELECT * FROM ${TIKTOK_UPLOADS_TABLE} WHERE user_key = $1::TEXT AND publish_id = $2 LIMIT 1`,
+    [String(userId), String(publishId)],
+  );
+  return result.rows[0] || null;
+}
+
+export async function updateTikTokUploadStatus({
+  userId,
+  publishId,
+  status,
+  errorCode = null,
+  supportLogId = null,
+  uploadedBytes = 0,
+  completed = false,
+}) {
+  await ensureSchema();
+  const result = await pool.query(
+    `
+      UPDATE ${TIKTOK_UPLOADS_TABLE}
+      SET status = $3,
+          tiktok_error_code = $4,
+          support_log_id = $5,
+          uploaded_bytes = GREATEST(uploaded_bytes, $6::BIGINT),
+          updated_at = NOW(),
+          completed_at = CASE WHEN $7::BOOLEAN THEN COALESCE(completed_at, NOW()) ELSE completed_at END
+      WHERE user_key = $1::TEXT AND publish_id = $2
+      RETURNING *
+    `,
+    [String(userId), String(publishId), status, errorCode, supportLogId, uploadedBytes, completed],
+  );
+  return result.rows[0] || null;
+}
+
+export async function countRecentTikTokUploadInits(userId, seconds = 60) {
+  await ensureSchema();
+  const result = await pool.query(
+    `
+      SELECT COUNT(*)::INTEGER AS count
+      FROM ${TIKTOK_UPLOADS_TABLE}
+      WHERE user_key = $1::TEXT
+        AND created_at > NOW() - ($2::INTEGER * INTERVAL '1 second')
+    `,
+    [String(userId), seconds],
+  );
+  return Number(result.rows[0]?.count || 0);
+}
+
+export async function findActiveTikTokUpload(userId) {
+  await ensureSchema();
+  const result = await pool.query(
+    `
+      SELECT *
+      FROM ${TIKTOK_UPLOADS_TABLE}
+      WHERE user_key = $1::TEXT
+        AND (
+          (status = 'INITIALIZED' AND updated_at > NOW() - INTERVAL '20 minutes')
+          OR
+          (status IN ('PROCESSING_UPLOAD', 'PROCESSING_DOWNLOAD')
+            AND updated_at > NOW() - INTERVAL '24 hours')
+        )
+      ORDER BY created_at DESC
+      LIMIT 1
+    `,
+    [String(userId)],
+  );
+  return result.rows[0] || null;
 }

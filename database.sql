@@ -70,3 +70,44 @@ CREATE TABLE IF NOT EXISTS theziess_compression_events_v1 (
 
 CREATE INDEX IF NOT EXISTS theziess_compression_events_v1_user_created_idx
   ON theziess_compression_events_v1(user_key, created_at DESC);
+
+-- TikTok OAuth connections. Tokens are encrypted in application code with
+-- AES-256-GCM before they are written to these TEXT columns.
+CREATE TABLE IF NOT EXISTS theziess_tiktok_connections_v1 (
+  id BIGSERIAL PRIMARY KEY,
+  user_key TEXT UNIQUE NOT NULL,
+  open_id TEXT NOT NULL,
+  display_name VARCHAR(255),
+  avatar_url TEXT,
+  granted_scopes TEXT NOT NULL,
+  encrypted_access_token TEXT NOT NULL,
+  encrypted_refresh_token TEXT NOT NULL,
+  access_token_expires_at TIMESTAMPTZ NOT NULL,
+  refresh_token_expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Upload metadata only. Video binaries are sent directly from the browser to
+-- TikTok's short-lived upload URL and are never stored in PostgreSQL.
+CREATE TABLE IF NOT EXISTS theziess_tiktok_uploads_v1 (
+  id BIGSERIAL PRIMARY KEY,
+  user_key TEXT NOT NULL,
+  publish_id VARCHAR(64) UNIQUE NOT NULL,
+  filename VARCHAR(255) NOT NULL,
+  byte_size BIGINT NOT NULL,
+  mime_type VARCHAR(120) NOT NULL,
+  status VARCHAR(64) NOT NULL DEFAULT 'INITIALIZED',
+  tiktok_error_code VARCHAR(120),
+  support_log_id VARCHAR(160),
+  uploaded_bytes BIGINT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS theziess_tiktok_uploads_v1_user_created_idx
+  ON theziess_tiktok_uploads_v1(user_key, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS theziess_tiktok_uploads_v1_user_status_idx
+  ON theziess_tiktok_uploads_v1(user_key, status, updated_at DESC);

@@ -201,3 +201,12 @@ All notable changes to the NoBlur project are documented in this file.
 - Made legacy plan-duration migration non-blocking.
 - Clear stale OAuth cookies after a failed callback.
 - Added safer callback diagnostics and a return-to-app error screen.
+
+## V20 — Official TikTok Login + Inbox Upload (Sandbox)
+
+- Added official TikTok OAuth 2.0 connection for Telegram-authenticated users with state, PKCE and secure cookies.
+- Added AES-256-GCM encrypted server-side token storage and automatic access-token refresh.
+- Added clean, real-timing TikTok upload artifacts created before local sample-table inflation.
+- Added official Inbox/Draft upload initialization, direct browser-to-TikTok chunk transfer, status polling and cancellation.
+- Added connected TikTok identity UI, explicit consent review modal, upload progress and Inbox completion guidance.
+- Added `/terms` and `/privacy`, versioned PostgreSQL tables and TikTok integration tests/documentation.

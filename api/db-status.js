@@ -17,7 +17,9 @@ export default async function handler(req, res) {
         to_regclass('theziess_free_trials_v5') IS NOT NULL AS free_trials_ready,
         to_regclass('theziess_subscriptions_v5') IS NOT NULL AS subscriptions_ready,
         to_regclass('theziess_payments_v5') IS NOT NULL AS payments_ready,
-        to_regclass('theziess_compression_events_v1') IS NOT NULL AS compression_events_ready
+        to_regclass('theziess_compression_events_v1') IS NOT NULL AS compression_events_ready,
+        to_regclass('theziess_tiktok_connections_v1') IS NOT NULL AS tiktok_connections_ready,
+        to_regclass('theziess_tiktok_uploads_v1') IS NOT NULL AS tiktok_uploads_ready
     `);
 
     return res.status(200).json({
@@ -29,7 +31,9 @@ export default async function handler(req, res) {
       subscriptionsReady: result.rows[0].subscriptions_ready,
       paymentsReady: result.rows[0].payments_ready,
       compressionEventsReady: result.rows[0].compression_events_ready,
-      schemaVersion: "telegram-login-v14-text-telegram-id",
+      tiktokConnectionsReady: result.rows[0].tiktok_connections_ready,
+      tiktokUploadsReady: result.rows[0].tiktok_uploads_ready,
+      schemaVersion: "official-tiktok-integration-v20",
     });
   } catch (error) {
     console.error("Database status error:", {

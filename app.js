@@ -15,6 +15,11 @@ import {
 } from "./src/mp4-boxes.mjs";
 import { inflateSampleTableVideo } from "./src/mp4-inflate.mjs";
 import { normalizeContainer } from "./src/mp4-normalize.mjs";
+import {
+    formatRealFps,
+    inspectMp4ForTikTok,
+    validateTikTokArtifact,
+} from "./src/tiktok-upload.mjs";
 
 const FRAME_CAPTURE_TIMEOUT_MS = 5000;
 const METADATA_TIMEOUT_MS = 10000;
@@ -199,7 +204,14 @@ let lastPatchedRes = "1080";
 
 let currentUser = null;
 let currentSubscription = null;
+let currentTikTokAccount = null;
 let pendingPlan = null;
+let pendingTikTokUpload = null;
+let pendingTikTokStatusCheck = null;
+let activeTikTokUploadController = null;
+let activeTikTokUploadPromise = null;
+let activeTikTokPublishId = null;
+let tiktokUploadPreviewUrl = null;
 
 const PLANS = {
     free: { id: "free", name: "FREE", price: "$0", durationLabel: "3 days", days: 3, adminOnly: false },
@@ -489,6 +501,7 @@ function updateAccessUI() {
     document.body.classList.toggle("access-granted", loggedIn);
     if (lock) lock.hidden = loggedIn;
     updateTelegramProfileUI(loggedIn, active);
+    updateTikTokAccountUI();
     updatePatchButton();
 }
 
@@ -582,6 +595,20 @@ async function initializeMembership() {
     const params = new URLSearchParams(location.search);
     const returningFromTelegram = params.get("telegram_login") === "success";
     await loadServerSession({ retries: returningFromTelegram ? 4 : 2 });
+    await loadTikTokAccount();
+
+    const tiktokResult = params.get("tiktok");
+    if (tiktokResult) {
+        params.delete("tiktok");
+        history.replaceState({}, "", `${location.pathname}${params.toString() ? `?${params}` : ""}${location.hash}`);
+        if (tiktokResult === "connected") {
+            await loadTikTokAccount();
+            logMessage("TikTok account connected. You can now upload clean videos to Inbox/Draft.", "success");
+        } else {
+            logMessage("TikTok connection was not completed. Please try again and approve both permissions.", "error");
+        }
+    }
+
     if (params.get("telegram_login") === "success") {
         params.delete("telegram_login");
         history.replaceState({}, "", `${location.pathname}${params.toString() ? `?${params}` : ""}${location.hash}`);
@@ -650,6 +677,7 @@ async function initializeMembership() {
         clearStoredTelegramUser();
         currentUser = null;
         currentSubscription = null;
+        currentTikTokAccount = null;
         updateAccessUI();
     });
     document.querySelectorAll("[data-close-modal]").forEach((button) => button.addEventListener("click", () => closeModal(button.dataset.closeModal)));
@@ -1212,6 +1240,7 @@ function initializeApp() {
     autoConnectTelegramAdminBot();
     renderHistoryList();
     initializeTikTokVideoChecker();
+    initializeTikTokPosting();
     initializeBottomNavigation();
     adjustMobileLayout();
     window.addEventListener("resize", adjustMobileLayout);
@@ -1408,6 +1437,601 @@ function downloadBuffer(data, filename, mimeType) {
     }, DOWNLOAD_REVOKE_DELAY_MS);
 }
 
+
+function formatDurationSeconds(value) {
+    const seconds = Number(value);
+    if (!Number.isFinite(seconds) || seconds <= 0) return "Unavailable";
+    const rounded = Math.round(seconds);
+    const minutes = Math.floor(rounded / 60);
+    const remainder = rounded % 60;
+    return `${minutes}:${String(remainder).padStart(2, "0")}`;
+}
+
+function updateTikTokAccountUI() {
+    const account = currentTikTokAccount;
+    const connected = Boolean(account?.connected);
+    const expired = account?.status === "expired";
+    const loading = account?.status === "loading";
+    const unavailable = account?.status === "unavailable";
+    const avatar = document.getElementById("tiktokAccountAvatar");
+    const name = document.getElementById("tiktokAccountName");
+    const status = document.getElementById("tiktokAccountStatus");
+    const scopes = document.getElementById("tiktokGrantedScopes");
+    const connectButton = document.getElementById("connectTikTokBtn");
+    const disconnectButton = document.getElementById("disconnectTikTokBtn");
+
+    if (name) {
+        name.textContent = connected || expired
+            ? account.displayName || "TikTok User"
+            : loading
+              ? "កំពុងពិនិត្យ TikTok…"
+              : "មិនទាន់ភ្ជាប់ TikTok";
+    }
+    if (status) {
+        status.textContent = connected
+            ? "បានភ្ជាប់ · អាចផ្ញើទៅ Inbox/Draft"
+            : expired
+              ? "Connection expired · សូមភ្ជាប់ម្ដងទៀត"
+              : loading
+                ? "កំពុងផ្ទុកស្ថានភាពគណនី / Loading account status"
+                : unavailable
+                  ? "មិនអាចពិនិត្យ TikTok បាន · សូមសាកម្ដងទៀត"
+                  : currentUser
+                    ? "ភ្ជាប់ TikTok ដើម្បីផ្ញើវីដេអូ Draft"
+                    : "សូម Login ជាមួយ Telegram ជាមុន";
+        status.classList.toggle("expired", expired || unavailable);
+    }
+    if (scopes) {
+        scopes.textContent = connected
+            ? (account.scopes || []).join(" · ")
+            : "user.info.basic · video.upload";
+    }
+    if (avatar) {
+        const avatarUrl = String(account?.avatarUrl || "");
+        avatar.hidden = !avatarUrl;
+        if (avatarUrl) avatar.src = avatarUrl;
+        else avatar.removeAttribute("src");
+    }
+    if (connectButton) {
+        connectButton.hidden = connected;
+        connectButton.disabled = !currentUser || loading;
+        const label = connectButton.querySelector("span");
+        if (label) {
+            label.textContent = loading
+                ? "កំពុងពិនិត្យ…"
+                : expired || unavailable
+                  ? "ភ្ជាប់ TikTok ម្ដងទៀត"
+                  : "ភ្ជាប់ TikTok / Connect";
+        }
+    }
+    if (disconnectButton) {
+        disconnectButton.hidden = loading || (!connected && !expired);
+        disconnectButton.disabled = loading;
+    }
+}
+
+async function loadTikTokAccount() {
+    if (!currentUser) {
+        currentTikTokAccount = null;
+        updateTikTokAccountUI();
+        return null;
+    }
+    currentTikTokAccount = { connected: false, status: "loading" };
+    updateTikTokAccountUI();
+    try {
+        const response = await fetch(`/api/tiktok/account?t=${Date.now()}`, {
+            method: "GET",
+            credentials: "include",
+            cache: "no-store",
+            headers: { Accept: "application/json" },
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok) throw new Error(data.error || "Unable to read TikTok account.");
+        currentTikTokAccount = data.account || null;
+    } catch (error) {
+        console.warn("TikTok account status unavailable", error);
+        currentTikTokAccount = { connected: false, status: "unavailable" };
+    }
+    updateTikTokAccountUI();
+    return currentTikTokAccount;
+}
+
+function cleanupTikTokUploadPreview() {
+    const preview = document.getElementById("tiktokUploadPreview");
+    if (preview) {
+        preview.pause();
+        preview.removeAttribute("src");
+        preview.load();
+    }
+    if (tiktokUploadPreviewUrl) {
+        URL.revokeObjectURL(tiktokUploadPreviewUrl);
+        tiktokUploadPreviewUrl = null;
+    }
+}
+
+function setTikTokUploadProgress({ percent = 0, uploaded = 0, total = 0, stage = "Ready" } = {}) {
+    const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
+    const bar = document.getElementById("tiktokUploadProgressBar");
+    if (bar) bar.style.width = `${safePercent}%`;
+    setElementText("tiktokUploadPercent", `${Math.round(safePercent)}%`);
+    setElementText("tiktokUploadBytes", `${formatFileSize(uploaded)} / ${formatFileSize(total)}`);
+    setElementText("tiktokUploadStage", stage);
+}
+
+function setTikTokUploadError(message = "") {
+    const errorElement = document.getElementById("tiktokUploadError");
+    if (!errorElement) return;
+    errorElement.hidden = !message;
+    errorElement.textContent = message;
+}
+
+function buildTikTokCandidate({ blob, filename, metadata, source = "processed" }) {
+    if (!(blob instanceof Blob)) throw new Error("TikTok upload artifact is missing.");
+    const cleanMetadata = {
+        ...metadata,
+        byteSize: blob.size,
+        mimeType: blob.type || metadata?.mimeType || "video/mp4",
+    };
+    const validation = validateTikTokArtifact(cleanMetadata);
+    if (!validation.valid) {
+        throw new Error(validation.errors.map((item) => item.message).join(" "));
+    }
+    return {
+        blob,
+        filename: String(filename || "theziess-tiktok-upload.mp4"),
+        metadata: cleanMetadata,
+        source,
+    };
+}
+
+async function openTikTokUploadReview(candidateInput) {
+    if (!requireLogin()) return;
+    if (!currentTikTokAccount?.connected) {
+        await loadTikTokAccount();
+    }
+    if (!currentTikTokAccount?.connected) {
+        openModal("profileModal");
+        document.getElementById("connectTikTokBtn")?.focus();
+        logMessage("Connect TikTok before uploading a draft.", "warning");
+        return;
+    }
+
+    if (pendingTikTokStatusCheck && pendingTikTokUpload) {
+        if (!tiktokUploadPreviewUrl) {
+            tiktokUploadPreviewUrl = URL.createObjectURL(pendingTikTokUpload.blob);
+            const existingPreview = document.getElementById("tiktokUploadPreview");
+            if (existingPreview) existingPreview.src = tiktokUploadPreviewUrl;
+        }
+        const retry = document.getElementById("tiktokUploadRetryBtn");
+        if (retry) {
+            retry.textContent = "ពិនិត្យ Status ម្ដងទៀត / Check Again";
+            retry.removeAttribute("hidden");
+        }
+        setTikTokUploadError("TikTok is still processing the current upload. Check its status before starting another.");
+        openModal("tiktokUploadModal");
+        lockScroll();
+        return;
+    }
+
+    let candidate;
+    try {
+        candidate = buildTikTokCandidate(candidateInput);
+    } catch (error) {
+        logMessage(`TikTok upload blocked: ${error.message}`, "error");
+        return;
+    }
+
+    pendingTikTokUpload = candidate;
+    pendingTikTokStatusCheck = null;
+    cleanupTikTokUploadPreview();
+    tiktokUploadPreviewUrl = URL.createObjectURL(candidate.blob);
+    const preview = document.getElementById("tiktokUploadPreview");
+    if (preview) preview.src = tiktokUploadPreviewUrl;
+
+    setElementText("tiktokUploadFilename", candidate.filename);
+    setElementText("tiktokUploadSize", formatFileSize(candidate.blob.size));
+    setElementText("tiktokUploadResolution", `${candidate.metadata.width}×${candidate.metadata.height}`);
+    setElementText("tiktokUploadDuration", formatDurationSeconds(candidate.metadata.duration));
+    setElementText("tiktokUploadFps", `${formatRealFps(candidate.metadata.fps)} FPS`);
+    setElementText("tiktokUploadAccountName", currentTikTokAccount.displayName || "TikTok User");
+
+    const accountAvatar = document.getElementById("tiktokUploadAccountAvatar");
+    if (accountAvatar) {
+        const url = String(currentTikTokAccount.avatarUrl || "");
+        accountAvatar.hidden = !url;
+        if (url) accountAvatar.src = url;
+        else accountAvatar.removeAttribute("src");
+    }
+
+    const consent = document.getElementById("tiktokUploadConsent");
+    if (consent) consent.checked = false;
+    const confirm = document.getElementById("tiktokUploadConfirmBtn");
+    if (confirm) confirm.disabled = true;
+    document.getElementById("tiktokUploadProgress")?.setAttribute("hidden", "");
+    document.getElementById("tiktokUploadSuccess")?.setAttribute("hidden", "");
+    const retryButton = document.getElementById("tiktokUploadRetryBtn");
+    retryButton?.setAttribute("hidden", "");
+    if (retryButton) retryButton.textContent = "សាកម្ដងទៀត / Retry";
+    setTikTokUploadError("");
+    setTikTokUploadProgress({ total: candidate.blob.size, stage: "Ready for consent" });
+    openModal("tiktokUploadModal");
+    lockScroll();
+}
+
+function xhrPutChunk({ uploadUrl, chunkBlob, contentRange, mimeType, signal, onProgress }) {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", uploadUrl, true);
+        xhr.setRequestHeader("Content-Type", mimeType);
+        xhr.setRequestHeader("Content-Range", contentRange);
+        // Browsers set the exact Content-Length automatically from chunkBlob.
+        xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable) onProgress?.(event.loaded, event.total);
+        };
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) resolve();
+            else reject(new Error(`TikTok upload failed (${xhr.status}).`));
+        };
+        xhr.onerror = () => reject(new Error("Network error while uploading to TikTok."));
+        xhr.onabort = () => reject(new DOMException("Upload cancelled", "AbortError"));
+
+        const abort = () => xhr.abort();
+        if (signal?.aborted) return abort();
+        signal?.addEventListener("abort", abort, { once: true });
+        xhr.onloadend = () => signal?.removeEventListener("abort", abort);
+        xhr.send(chunkBlob);
+    });
+}
+
+function waitWithSignal(milliseconds, signal) {
+    return new Promise((resolve, reject) => {
+        const finish = () => {
+            signal?.removeEventListener("abort", abort);
+            resolve();
+        };
+        const timer = setTimeout(finish, milliseconds);
+        const abort = () => {
+            clearTimeout(timer);
+            signal?.removeEventListener("abort", abort);
+            reject(new DOMException("Upload cancelled", "AbortError"));
+        };
+        if (signal?.aborted) return abort();
+        signal?.addEventListener("abort", abort, { once: true });
+    });
+}
+
+async function cancelTikTokUploadRecord(publishId) {
+    if (!publishId) return;
+    try {
+        await fetch("/api/tiktok/upload/cancel", {
+            method: "POST",
+            credentials: "include",
+            cache: "no-store",
+            keepalive: true,
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({ publishId }),
+        });
+    } catch {
+        // Cancellation is best effort and must not freeze the interface.
+    }
+}
+
+async function pollTikTokUploadStatus(publishId, totalBytes, signal) {
+    const delays = [1000, 1500, 2500, 4000, 6500, 10_000, 10_000, 10_000, 10_000, 10_000];
+    for (const delay of delays) {
+        await waitWithSignal(delay, signal);
+        const response = await fetch("/api/tiktok/upload/status", {
+            method: "POST",
+            credentials: "include",
+            cache: "no-store",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({ publishId }),
+            signal,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok) throw new Error(data.error || "Unable to read TikTok upload status.");
+        const uploadedBytes = Math.min(totalBytes, Number(data.uploadedBytes || totalBytes));
+        setTikTokUploadProgress({
+            percent: 100,
+            uploaded: uploadedBytes,
+            total: totalBytes,
+            stage: data.message || data.stage,
+        });
+        if (data.terminal) return data;
+    }
+    return { terminal: false, success: false, status: "PROCESSING_UPLOAD" };
+}
+
+function showTikTokUploadSuccess(candidate) {
+    const successPanel = document.getElementById("tiktokUploadSuccess");
+    successPanel?.removeAttribute("hidden");
+    setElementText(
+        "tiktokUploadSuccessMessage",
+        "Upload complete. Open the TikTok app, check your Inbox notification, review the video and finish posting it.",
+    );
+    setTikTokUploadProgress({
+        percent: 100,
+        uploaded: candidate.blob.size,
+        total: candidate.blob.size,
+        stage: "Draft delivered to TikTok Inbox",
+    });
+    logMessage("TikTok draft upload complete. Finish posting inside the TikTok app.", "success");
+    pendingTikTokStatusCheck = null;
+    cleanupTikTokUploadPreview();
+    pendingTikTokUpload = null;
+}
+
+async function checkPendingTikTokUploadStatus() {
+    if (!pendingTikTokStatusCheck || !pendingTikTokUpload || activeTikTokUploadPromise) return;
+    const candidate = pendingTikTokUpload;
+    const pending = pendingTikTokStatusCheck;
+    const controller = new AbortController();
+    activeTikTokUploadController = controller;
+    const retry = document.getElementById("tiktokUploadRetryBtn");
+    const cancel = document.getElementById("tiktokUploadCancelBtn");
+    const close = document.getElementById("tiktokUploadCloseBtn");
+    retry?.setAttribute("hidden", "");
+    if (cancel) cancel.textContent = "Stop Checking";
+    if (close) close.disabled = true;
+    setTikTokUploadError("");
+
+    activeTikTokUploadPromise = pollTikTokUploadStatus(
+        pending.publishId,
+        pending.totalBytes,
+        controller.signal,
+    );
+    try {
+        const result = await activeTikTokUploadPromise;
+        if (result.terminal && result.success) {
+            showTikTokUploadSuccess(candidate);
+        } else if (result.terminal) {
+            pendingTikTokStatusCheck = null;
+            throw new Error(
+                result.failReason
+                    ? `TikTok processing failed: ${result.failReason}`
+                    : "TikTok processing failed.",
+            );
+        } else {
+            setTikTokUploadProgress({
+                percent: 100,
+                uploaded: candidate.blob.size,
+                total: candidate.blob.size,
+                stage: "TikTok is still processing. Check again shortly.",
+            });
+            if (retry) {
+                retry.textContent = "ពិនិត្យ Status ម្ដងទៀត / Check Again";
+                retry.removeAttribute("hidden");
+            }
+        }
+    } catch (error) {
+        if (error?.name === "AbortError") {
+            setTikTokUploadError("Status checking paused. TikTok may continue processing the uploaded video.");
+        } else {
+            setTikTokUploadError(error.message || "Unable to check TikTok processing status.");
+        }
+        if (pendingTikTokStatusCheck && retry) {
+            retry.textContent = "ពិនិត្យ Status ម្ដងទៀត / Check Again";
+            retry.removeAttribute("hidden");
+        }
+    } finally {
+        activeTikTokUploadController = null;
+        activeTikTokUploadPromise = null;
+        if (cancel) cancel.textContent = "បោះបង់ / Cancel";
+        if (close) close.disabled = false;
+    }
+}
+
+async function performTikTokUpload() {
+    if (!pendingTikTokUpload || activeTikTokUploadPromise) return;
+    const candidate = pendingTikTokUpload;
+    let uploadReachedTerminalStatus = false;
+    let binaryTransferComplete = false;
+    const controller = new AbortController();
+    activeTikTokUploadController = controller;
+
+    const confirm = document.getElementById("tiktokUploadConfirmBtn");
+    const cancel = document.getElementById("tiktokUploadCancelBtn");
+    const close = document.getElementById("tiktokUploadCloseBtn");
+    const progressPanel = document.getElementById("tiktokUploadProgress");
+    const retry = document.getElementById("tiktokUploadRetryBtn");
+    const successPanel = document.getElementById("tiktokUploadSuccess");
+
+    if (confirm) confirm.disabled = true;
+    if (cancel) cancel.textContent = "Cancel Upload";
+    if (close) close.disabled = true;
+    progressPanel?.removeAttribute("hidden");
+    successPanel?.setAttribute("hidden", "");
+    retry?.setAttribute("hidden", "");
+    setTikTokUploadError("");
+
+    activeTikTokUploadPromise = (async () => {
+        setTikTokUploadProgress({ total: candidate.blob.size, stage: "Creating secure TikTok upload session…" });
+        const initResponse = await fetch("/api/tiktok/upload/init", {
+            method: "POST",
+            credentials: "include",
+            cache: "no-store",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({
+                filename: candidate.filename,
+                fileSize: candidate.blob.size,
+                mimeType: candidate.blob.type || "video/mp4",
+            }),
+            signal: controller.signal,
+        });
+        const initData = await initResponse.json().catch(() => ({}));
+        if (!initResponse.ok || !initData.ok) throw new Error(initData.error || "TikTok upload initialization failed.");
+        activeTikTokPublishId = initData.publishId;
+
+        let uploadedBefore = 0;
+        for (const chunk of initData.chunkPlan.chunks) {
+            const chunkBlob = candidate.blob.slice(chunk.start, chunk.end + 1, candidate.blob.type);
+            await xhrPutChunk({
+                uploadUrl: initData.uploadUrl,
+                chunkBlob,
+                mimeType: candidate.blob.type || "video/mp4",
+                contentRange: `bytes ${chunk.start}-${chunk.end}/${candidate.blob.size}`,
+                signal: controller.signal,
+                onProgress: (loaded) => {
+                    const uploaded = Math.min(candidate.blob.size, uploadedBefore + loaded);
+                    setTikTokUploadProgress({
+                        percent: (uploaded / candidate.blob.size) * 100,
+                        uploaded,
+                        total: candidate.blob.size,
+                        stage: `Uploading chunk ${chunk.index + 1}/${initData.chunkPlan.totalChunkCount}`,
+                    });
+                },
+            });
+            uploadedBefore += chunk.size;
+        }
+        binaryTransferComplete = true;
+        if (cancel) cancel.textContent = "Stop Checking";
+
+        setTikTokUploadProgress({
+            percent: 100,
+            uploaded: candidate.blob.size,
+            total: candidate.blob.size,
+            stage: "Upload sent. Waiting for TikTok processing…",
+        });
+
+        const result = await pollTikTokUploadStatus(initData.publishId, candidate.blob.size, controller.signal);
+        uploadReachedTerminalStatus = Boolean(result.terminal);
+        if (result.terminal && !result.success) {
+            throw new Error(result.failReason ? `TikTok processing failed: ${result.failReason}` : "TikTok processing failed.");
+        }
+
+        if (result.success) {
+            showTikTokUploadSuccess(candidate);
+        } else {
+            pendingTikTokStatusCheck = {
+                publishId: initData.publishId,
+                totalBytes: candidate.blob.size,
+            };
+            setTikTokUploadProgress({
+                percent: 100,
+                uploaded: candidate.blob.size,
+                total: candidate.blob.size,
+                stage: "TikTok is still processing. Check again shortly.",
+            });
+            if (retry) {
+                retry.textContent = "ពិនិត្យ Status ម្ដងទៀត / Check Again";
+                retry.removeAttribute("hidden");
+            }
+        }
+    })();
+
+    try {
+        await activeTikTokUploadPromise;
+    } catch (error) {
+        if (activeTikTokPublishId && !uploadReachedTerminalStatus && !binaryTransferComplete) {
+            await cancelTikTokUploadRecord(activeTikTokPublishId);
+        }
+        if (binaryTransferComplete && activeTikTokPublishId && !uploadReachedTerminalStatus) {
+            pendingTikTokStatusCheck = {
+                publishId: activeTikTokPublishId,
+                totalBytes: candidate.blob.size,
+            };
+        }
+        if (error?.name === "AbortError" && binaryTransferComplete) {
+            setTikTokUploadError("Status checking paused. TikTok may continue processing the uploaded video.");
+            setTikTokUploadProgress({
+                percent: 100,
+                uploaded: candidate.blob.size,
+                total: candidate.blob.size,
+                stage: "Status checking paused",
+            });
+            if (retry) {
+                retry.textContent = "ពិនិត្យ Status ម្ដងទៀត / Check Again";
+                retry.removeAttribute("hidden");
+            }
+        } else if (error?.name === "AbortError") {
+            setTikTokUploadError("Upload cancelled. Select Upload to TikTok again when you are ready.");
+            setTikTokUploadProgress({ total: candidate.blob.size, stage: "Cancelled" });
+            cleanupTikTokUploadPreview();
+            pendingTikTokUpload = null;
+            pendingTikTokStatusCheck = null;
+        } else {
+            setTikTokUploadError(error.message || "TikTok upload failed.");
+            if (pendingTikTokStatusCheck && retry) {
+                retry.textContent = "ពិនិត្យ Status ម្ដងទៀត / Check Again";
+            } else if (retry) {
+                retry.textContent = "សាកម្ដងទៀត / Retry";
+            }
+            retry?.removeAttribute("hidden");
+            logMessage(`TikTok upload failed: ${error.message}`, "error");
+        }
+    } finally {
+        activeTikTokUploadController = null;
+        activeTikTokUploadPromise = null;
+        activeTikTokPublishId = null;
+        if (cancel) cancel.textContent = "បោះបង់ / Cancel";
+        if (close) close.disabled = false;
+    }
+}
+
+function initializeTikTokPosting() {
+    updateTikTokAccountUI();
+    document.getElementById("connectTikTokBtn")?.addEventListener("click", () => {
+        if (!requireLogin()) return;
+        window.location.assign("/api/auth/tiktok");
+    });
+    document.getElementById("disconnectTikTokBtn")?.addEventListener("click", async () => {
+        if (!currentUser) return;
+        const button = document.getElementById("disconnectTikTokBtn");
+        button.disabled = true;
+        try {
+            const response = await fetch("/api/tiktok/disconnect", {
+                method: "POST",
+                credentials: "include",
+                cache: "no-store",
+                headers: { "Content-Type": "application/json", Accept: "application/json" },
+                body: JSON.stringify({}),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data.ok) throw new Error(data.error || "Unable to disconnect TikTok.");
+            currentTikTokAccount = null;
+            updateTikTokAccountUI();
+            logMessage("TikTok account disconnected.", "success");
+        } catch (error) {
+            logMessage(error.message || "Unable to disconnect TikTok.", "error");
+        } finally {
+            button.disabled = false;
+        }
+    });
+
+    const consent = document.getElementById("tiktokUploadConsent");
+    const confirm = document.getElementById("tiktokUploadConfirmBtn");
+    consent?.addEventListener("change", () => {
+        if (confirm) confirm.disabled = !consent.checked || Boolean(activeTikTokUploadPromise);
+    });
+    confirm?.addEventListener("click", performTikTokUpload);
+    document.getElementById("tiktokUploadRetryBtn")?.addEventListener("click", () => {
+        if (pendingTikTokStatusCheck) void checkPendingTikTokUploadStatus();
+        else void performTikTokUpload();
+    });
+    document.getElementById("tiktokUploadCancelBtn")?.addEventListener("click", () => {
+        if (activeTikTokUploadController) {
+            activeTikTokUploadController.abort();
+            return;
+        }
+        closeModal("tiktokUploadModal");
+        unlockScroll();
+        cleanupTikTokUploadPreview();
+    });
+    document.getElementById("tiktokUploadCloseBtn")?.addEventListener("click", () => {
+        if (activeTikTokUploadPromise) return;
+        closeModal("tiktokUploadModal");
+        unlockScroll();
+        cleanupTikTokUploadPreview();
+    });
+    document.getElementById("tiktokUploadModal")?.addEventListener("click", (event) => {
+        if (event.target === event.currentTarget && !activeTikTokUploadPromise) {
+            closeModal("tiktokUploadModal");
+            unlockScroll();
+            cleanupTikTokUploadPreview();
+        }
+    });
+}
+
 function getStatusLabel(status) {
     return (
         {
@@ -1497,6 +2121,30 @@ function renderFileList() {
         badge.textContent = getStatusLabel(item.status);
         right.appendChild(badge);
 
+        if (item.status === "success" && item.tiktokUploadBlob) {
+            const uploadButton = document.createElement("button");
+            uploadButton.type = "button";
+            uploadButton.className = "file-tiktok-upload-btn";
+            uploadButton.title = item.tiktokUploadValidation?.valid
+                ? "Upload clean video to TikTok Inbox/Draft"
+                : "This video is not compatible with TikTok upload requirements";
+            uploadButton.disabled = !item.tiktokUploadValidation?.valid;
+            const uploadIcon = document.createElement("i");
+            uploadIcon.className = "ri-tiktok-fill";
+            const uploadLabel = document.createElement("span");
+            uploadLabel.textContent = "Upload";
+            uploadButton.append(uploadIcon, uploadLabel);
+            uploadButton.addEventListener("click", () => {
+                void openTikTokUploadReview({
+                    blob: item.tiktokUploadBlob,
+                    filename: item.outputName,
+                    metadata: item.tiktokUploadMeta,
+                    source: "processed",
+                });
+            });
+            right.appendChild(uploadButton);
+        }
+
         if (item.status === "pending" && currentFlowState !== "patching") {
             const removeBtn = document.createElement("button");
             removeBtn.className = "file-remove-btn";
@@ -1550,6 +2198,9 @@ async function addFiles(fileList) {
                 size: file.size,
                 status: "pending",
                 patchedBuffer: null,
+                tiktokUploadBlob: null,
+                tiktokUploadMeta: null,
+                tiktokUploadValidation: null,
                 outputName: null,
                 mimeType: null,
                 checked: true,
@@ -2159,6 +2810,34 @@ async function patchSingleFile(item) {
         logMessage("  Container already normalized.", "info");
     }
 
+    // Keep a clean, truthful TikTok upload artifact before the local sample-table
+    // inflation step. TikTok accepts only real 23–60 FPS media timing.
+    let tiktokUploadBlob = null;
+    let tiktokUploadMeta = null;
+    let tiktokUploadValidation = null;
+    try {
+        tiktokUploadMeta = inspectMp4ForTikTok(finalBuffer, "video/mp4");
+        tiktokUploadValidation = validateTikTokArtifact(tiktokUploadMeta);
+        tiktokUploadBlob = new Blob([finalBuffer.slice(0)], { type: "video/mp4" });
+        if (tiktokUploadValidation.valid) {
+            logMessage(
+                `  TikTok draft artifact ready: ${tiktokUploadMeta.width}x${tiktokUploadMeta.height} · ${formatRealFps(tiktokUploadMeta.fps)} FPS.`,
+                "success",
+            );
+        } else {
+            logMessage(
+                `  TikTok draft artifact is incompatible: ${tiktokUploadValidation.errors.map((item) => item.message).join(" ")}`,
+                "warning",
+            );
+        }
+    } catch (error) {
+        tiktokUploadValidation = {
+            valid: false,
+            errors: [{ code: "metadata", message: error.message || "Unable to inspect clean TikTok artifact." }],
+        };
+        logMessage(`  TikTok artifact inspection failed: ${error.message}`, "warning");
+    }
+
     const inflateResult = inflateSampleTableVideo(finalBytes, finalView, 10);
     finalBuffer = inflateResult.newBuffer;
     finalBytes = inflateResult.newBytes;
@@ -2171,6 +2850,9 @@ async function patchSingleFile(item) {
         mimeType,
         prePatchBuffer: sourceBuffer,
         movThumbnail,
+        tiktokUploadBlob,
+        tiktokUploadMeta,
+        tiktokUploadValidation,
     };
 }
 
@@ -2360,6 +3042,9 @@ patchBtn.addEventListener("click", async () => {
             }
             item.status = "success";
             item.patchedBuffer = result.finalBuffer;
+            item.tiktokUploadBlob = result.tiktokUploadBlob;
+            item.tiktokUploadMeta = result.tiktokUploadMeta;
+            item.tiktokUploadValidation = result.tiktokUploadValidation;
             item.outputName = result.outputName;
             item.mimeType = result.mimeType;
             item.checked = true;
@@ -2422,6 +3107,9 @@ patchBtn.addEventListener("click", async () => {
                         thumbnail,
                         blob,
                         mimeType: result.mimeType,
+                        tiktokBlob: result.tiktokUploadBlob,
+                        tiktokMeta: result.tiktokUploadMeta,
+                        tiktokValidation: result.tiktokUploadValidation,
                     });
 
                     void reportCompressionActivity({
@@ -2546,9 +3234,10 @@ async function renderHistoryList() {
 
         const meta = document.createElement("div");
         meta.className = "history-item-meta";
+        const needsReprocessForTikTok = !(record.tiktokBlob && record.tiktokValidation?.valid);
         meta.textContent = `${formatFileSize(record.size)} • ${new Date(
             record.timestamp,
-        ).toLocaleTimeString()}`;
+        ).toLocaleTimeString()}${needsReprocessForTikTok ? " • TikTok: សូម Process ម្ដងទៀត" : " • TikTok Draft ready"}`;
 
         body.appendChild(name);
         body.appendChild(meta);
@@ -2579,7 +3268,30 @@ async function renderHistoryList() {
             await renderHistoryList();
         });
 
+        const uploadBtn = document.createElement("button");
+        uploadBtn.className = "history-btn history-btn-tiktok";
+        uploadBtn.title = record.tiktokBlob && record.tiktokValidation?.valid
+            ? "Upload this clean artifact to TikTok Inbox/Draft"
+            : "Process this video again to create a valid clean TikTok artifact";
+        uploadBtn.disabled = !(record.tiktokBlob && record.tiktokValidation?.valid);
+        const uploadIcon = document.createElement("i");
+        uploadIcon.className = "ri-tiktok-fill";
+        uploadBtn.appendChild(uploadIcon);
+        uploadBtn.addEventListener("click", () => {
+            if (!(record.tiktokBlob && record.tiktokValidation?.valid)) {
+                logMessage("This history item has no clean TikTok artifact. Process the video again.", "warning");
+                return;
+            }
+            void openTikTokUploadReview({
+                blob: record.tiktokBlob,
+                filename: record.name,
+                metadata: record.tiktokMeta,
+                source: "history",
+            });
+        });
+
         actions.appendChild(dlBtn);
+        actions.appendChild(uploadBtn);
         actions.appendChild(delBtn);
 
         item.appendChild(thumb);

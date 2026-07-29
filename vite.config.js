@@ -1,4 +1,5 @@
 import { cpSync, existsSync, mkdirSync } from "node:fs";
+import { resolve } from "node:path";
 import { defineConfig } from "vite";
 
 const STATIC_ASSETS = [
@@ -7,6 +8,7 @@ const STATIC_ASSETS = [
     "ffmpeg-worker",
     "coi-serviceworker.js",
     "preview.webp",
+    "logo.png",
 ];
 
 function copyStaticAssets() {
@@ -38,6 +40,11 @@ export default defineConfig({
     build: {
         copyPublicDir: false,
         rollupOptions: {
+            input: {
+                main: resolve(process.cwd(), "index.html"),
+                terms: resolve(process.cwd(), "terms.html"),
+                privacy: resolve(process.cwd(), "privacy.html"),
+            },
             plugins: [
                 {
                     name: "copy-static-assets",

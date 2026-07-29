@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="THEZIESS METHOD Privacy Policy">
+  <title>Privacy Policy — THEZIESS METHOD</title>
+  <link rel="icon" href="/logo.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Khmer:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{color-scheme:dark;font-family:"Noto Sans Khmer",system-ui,sans-serif;background:#0b0612;color:#f7f1ff}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#28113d 0,#0b0612 42%);line-height:1.75}main{width:min(920px,calc(100% - 28px));margin:28px auto 70px}.hero,.card{border:1px solid #5a3678;background:rgba(20,10,34,.92);box-shadow:8px 8px 0 rgba(244,63,94,.11);border-radius:18px}.hero{padding:24px;margin-bottom:18px}.brand{display:flex;gap:12px;align-items:center}.brand img{width:48px;height:48px;border-radius:12px}.brand h1{margin:0;font-size:clamp(24px,5vw,40px)}.brand span{color:#67e8f9}.card{padding:22px;margin:14px 0}.card h2{margin-top:0;color:#e9d5ff}.card strong{color:#67e8f9}ul{padding-left:22px}a{color:#c4b5fd}.meta{color:#b9aac8;font-size:13px}.back{display:inline-flex;margin-top:10px;padding:10px 14px;border:1px solid #22d3ee;border-radius:10px;text-decoration:none;font-weight:800}code{color:#f0abfc}</style>
+</head>
+<body>
+<main>
+  <section class="hero">
+    <div class="brand"><img src="/logo.png" alt="THEZIESS METHOD logo"><div><h1>Privacy <span>Policy</span></h1><p class="meta">Effective: 29 July 2026</p></div></div>
+    <a class="back" href="/">← Return to THEZIESS METHOD</a>
+  </section>
+
+  <section class="card"><h2>1. Information collected</h2><p>When you authenticate with Telegram, THEZIESS METHOD stores the Telegram account identifier and the profile fields supplied by Telegram, such as display name, username and profile photo URL. It also stores account login timestamps, subscription records, payment-reference records and compression activity metadata used by the application.</p><p>When you connect TikTok, the service requests only <code>user.info.basic</code> and <code>video.upload</code>. It stores the TikTok app-specific <code>open_id</code>, display name, avatar URL, granted scopes, token expiry times and encrypted OAuth tokens.</p></section>
+
+  <section class="card"><h2>2. Purpose of TikTok upload permission</h2><p>The <code>video.upload</code> permission is used only after you select a successfully processed video, review its details, confirm that you own or may upload the content and press the upload button. The video is sent to TikTok Inbox/Draft so you can finish the post in the TikTok app. The service does not use this permission for automatic bulk posting.</p></section>
+
+  <section class="card"><h2>3. Video processing and storage</h2><p><strong>Videos are processed locally in your browser.</strong> THEZIESS METHOD does not save the video binary in PostgreSQL or permanent application server storage. For TikTok upload, the browser sends the clean video artifact directly to the short-lived official TikTok upload URL. Vercel Functions receive metadata only, such as filename, MIME type and byte size.</p><p>Local IndexedDB history may contain downloaded output and, when available, a clean TikTok-compatible artifact on your own device. Clearing browser data or using the in-app history deletion controls removes those local records.</p></section>
+
+  <section class="card"><h2>4. Token protection</h2><p>TikTok access and refresh tokens remain server-side. They are encrypted in PostgreSQL with AES-256-GCM using a server-only encryption key. Tokens, client secrets, authorization codes, encryption keys and TikTok upload URLs are not intentionally written to frontend storage or application logs.</p></section>
+
+  <section class="card"><h2>5. Operational upload records</h2><p>The service stores upload metadata including the owner key, TikTok publish identifier, filename, byte size, MIME type, processing status, safe TikTok error code, timestamps and completion time. It does not store the uploaded video. These records may be retained for operational support, abuse prevention and troubleshooting until manually deleted or no longer needed.</p></section>
+
+  <section class="card"><h2>6. Retention, deletion and disconnect</h2><p>Your TikTok connection remains stored until you disconnect it, the token expires without renewal, or the administrator deletes the account data. “Disconnect TikTok” attempts official token revocation and deletes the stored connection record. You may request deletion of associated operational metadata through the support contact below.</p></section>
+
+  <section class="card"><h2>7. Sharing and third parties</h2><p>Account and upload requests are shared only with the services needed to operate the feature: Telegram for authentication, TikTok for OAuth/profile/upload processing, Vercel for hosting and the configured PostgreSQL provider for application records. TikTok’s handling of information is governed by TikTok’s own policies.</p></section>
+
+  <section class="card"><h2>8. Security and limitations</h2><p>The service uses signed HttpOnly session cookies, OAuth state validation, PKCE, same-origin checks and encrypted token storage. No internet service can guarantee absolute security. Report suspected unauthorized access through the support channel.</p></section>
+
+  <section class="card"><h2>9. Contact</h2><p>For privacy questions, connection revocation or account-data deletion, contact the THEZIESS METHOD administrator through <a href="https://t.me/TheZiess_OfficialBot" rel="noopener noreferrer">@TheZiess_OfficialBot on Telegram</a>.</p></section>
+</main>
+</body>
+</html>
