@@ -44,7 +44,7 @@
     }
   ],
   "functions": {
-    "api/**/*.js": {
+    "api/[...route].js": {
       "maxDuration": 30
     }
   }

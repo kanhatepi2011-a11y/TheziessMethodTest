@@ -21,9 +21,9 @@ beforeAll(async () => {
     process.env.TIKTOK_PUBLIC_URL = "https://theziessmethod.site";
     process.env.TIKTOK_SCOPES = "user.info.basic,video.upload";
 
-    tiktok = await import("../server/api/_tiktok.js");
-    session = await import("../server/api/_session.js");
-    callbackHandler = (await import("../server/api/auth/tiktok/callback.js")).default;
+    tiktok = await import("../server/routes/_tiktok.js");
+    session = await import("../server/routes/_session.js");
+    callbackHandler = (await import("../server/routes/auth/tiktok/callback.js")).default;
     media = await import("../src/tiktok-upload.mjs");
 });
 

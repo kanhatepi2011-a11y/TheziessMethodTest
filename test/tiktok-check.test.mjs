@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractTikTokDataFromHtml } from "../server/api/tiktok/check.js";
+import { extractTikTokDataFromHtml } from "../server/routes/tiktok/check.js";
 
 describe("TikTok video checker metadata parser", () => {
   it("extracts resolution, bitrate, fps, duration and size", () => {

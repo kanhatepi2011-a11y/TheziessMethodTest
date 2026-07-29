@@ -1,21 +1,11 @@
-# Anajak Python backend
-server.py
-requirements.txt
-run_server.sh
-START_*.bat
-
-# Python project detection files
-pyproject.toml
-.python-version
-Pipfile
-Pipfile.lock
-poetry.lock
-uv.lock
-runtime.txt
-
-# Python source/cache
-*.py
-*.pyc
-__pycache__/
-.venv/
-venv/
+# V22: the application has exactly one Vercel Function entrypoint.
+# Ignore any legacy API trees accidentally left behind by older ZIP copies.
+server/api/
+api/*/
+api/_*.js
+api/activity/
+api/auth/
+api/subscription/
+api/telegram/
+api/tiktok/
+api/db-status.js

@@ -217,3 +217,10 @@ All notable changes to the NoBlur project are documented in this file.
 - Moved existing handlers and private helpers to `server/api/` without changing public API URLs.
 - Added `api/[...route].js` to dispatch all Telegram, subscription, database and TikTok endpoints.
 - Updated Vercel function configuration and test import paths.
+
+## V22 — Vercel Hobby function limit cleanup
+- Kept a single Vercel Function entrypoint at `api/[...route].js`.
+- Renamed internal handlers from `server/api` to `server/routes`.
+- Restricted `vercel.json` function configuration to the catch-all entrypoint.
+- Added `.vercelignore` safeguards for stale API trees.
+- Added `npm run cleanup-api` to remove files left behind by copy-over updates.

@@ -277,7 +277,7 @@ stored TikTok tokens unreadable, so connected users would need to reconnect.
 ### Database migration
 
 The application creates these non-destructive versioned tables through
-`server/api/_db.js`; the same schema is included in `database.sql`:
+`server/routes/_db.js`; the same schema is included in `database.sql`:
 
 - `theziess_tiktok_connections_v1` — Telegram user key, TikTok identity,
   granted scopes, encrypted tokens, token expiry and timestamps.
