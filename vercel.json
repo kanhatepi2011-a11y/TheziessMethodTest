@@ -21,24 +21,3 @@
     }
   }
 }
-
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "http://my.anajak.cloud:23991/api/:path*"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/api/:path*",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-store"
-        }
-      ]
-    }
-  ]
-
-
